@@ -7,7 +7,7 @@ import Language.Java.SourceSpan
 import Language.Java.Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (HasCallStack, assertFailure, testCaseInfo, (@?))
-import Prelude hiding (div, exp)
+import Prelude hiding (exp)
 
 ident :: String -> Exp Parsed
 ident name = ExpName (Name dummySourceSpan (Ident dummySourceSpan name :| []))
