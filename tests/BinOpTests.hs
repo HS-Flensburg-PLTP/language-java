@@ -5,8 +5,8 @@ import Language.Java.Parser (ParserMode (ParseFull), ParserState (ParserState), 
 import Language.Java.Pretty (Pretty (pretty))
 import Language.Java.SourceSpan
 import Language.Java.Syntax
-import Test.Tasty (TestTree)
-import Test.Tasty.HUnit (HasCallStack, assertFailure, testCase, (@?))
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (HasCallStack, assertFailure, testCaseInfo, (@?))
 import Prelude hiding (div, exp)
 
 ident :: String -> Exp Parsed
@@ -16,10 +16,12 @@ binOp :: Op -> Exp Parsed -> Exp Parsed -> Exp Parsed
 binOp = flip (BinOp dummySourceSpan)
 
 testRoundTrip :: (HasCallStack) => Exp Parsed -> TestTree
-testRoundTrip e = testCase (prettyExplicit e) $
+testRoundTrip e = testCaseInfo (prettyExplicit e) $
   case parserWithState (ParserState ParseFull False) exp "" (show (pretty e)) of
     Left err -> assertFailure (show err)
-    Right (e', _) -> eq IgnoreSourceSpan e e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'
+    Right (e', _) -> do
+      eq IgnoreSourceSpan e e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'
+      pure ("pretty-printed: " ++ show (pretty e))
 
 prettyExplicit :: Exp Parsed -> String
 prettyExplicit (BinOp _ a op b) = "(" ++ prettyExplicit a ++ " " ++ show (pretty op) ++ " " ++ prettyExplicit b ++ ")"
@@ -27,23 +29,47 @@ prettyExplicit e = show (pretty e)
 
 testBinOp :: [TestTree]
 testBinOp =
-  [ testRoundTrip ((a +: b) *: c),
-    testRoundTrip (a +: (b *: c)),
-    testRoundTrip ((a -: b) -: c),
-    testRoundTrip (a -: (b -: c)),
-    testRoundTrip ((((a -: b) *: c) +: d) /: e),
-    testRoundTrip ((a -: (b *: c)) +: (d /: e)),
-    testRoundTrip (a -: ((b *: c) +: (d /: e))),
-    testRoundTrip (((a -: b) *: (c +: d)) /: e),
-    testRoundTrip ((a -: b) *: ((c +: d) /: e)),
-    testRoundTrip ((((a -: b) -: c) -: d) -: e),
-    testRoundTrip (a -: (b -: (c -: (d -: e))))
+  [ testGroup
+      "3-operand add/sub"
+      [ testRoundTrip ((a +: b) *: c),
+        testRoundTrip (a +: (b *: c)),
+        testRoundTrip ((a -: b) -: c),
+        testRoundTrip (a -: (b -: c))
+      ],
+    testGroup
+      "5-operand add/sub/mul/div"
+      [ testRoundTrip ((((a -: b) *: c) +: d) /: e),
+        testRoundTrip ((a -: (b *: c)) +: (d /: e)),
+        testRoundTrip (a -: ((b *: c) +: (d /: e))),
+        testRoundTrip (((a *: b) +: (c /: d)) -: e),
+        testRoundTrip ((a *: b) +: ((c /: d) -: e)),
+        testRoundTrip (((a -: b) *: (c +: d)) /: e),
+        testRoundTrip ((a -: b) *: ((c +: d) /: e)),
+        testRoundTrip ((((a -: b) -: c) -: d) -: e),
+        testRoundTrip (a -: (b -: (c -: (d -: e))))
+      ],
+    testGroup
+      "comparisons"
+      [ testRoundTrip ((a +: b) <: c),
+        testRoundTrip (a >: (b +: c)),
+        testRoundTrip ((a +: b) <: (c +: d))
+      ],
+    testGroup
+      "logical operators"
+      [ testRoundTrip (((a ==: b) ||: (b ==: c)) &&: ((c ==: d) ||: (d ==: e))),
+        testRoundTrip (((a ==: b) &&: (b ==: c)) ||: ((c ==: d) &&: (d ==: e)))
+      ]
   ]
   where
     (+:) = binOp Add
     (-:) = binOp Sub
     (*:) = binOp Mult
     (/:) = binOp Div
+    (<:) = binOp LThan
+    (>:) = binOp GThan
+    (==:) = binOp Equal
+    (&&:) = binOp CAnd
+    (||:) = binOp COr
     a = ident "a"
     b = ident "b"
     c = ident "c"
