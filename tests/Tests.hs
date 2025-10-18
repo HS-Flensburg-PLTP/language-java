@@ -2,6 +2,7 @@
 
 module Main where
 
+import BinOpTests (testBinOp)
 import qualified Control.Exception as E
 import Control.Monad
 import Data.List (isSuffixOf)
@@ -92,5 +93,6 @@ main = do
               Right g' -> eq IgnoreSourceSpan g g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),
+        testGroup "binary operators" testBinOp,
         testGroup "transformer tests" allTransformerTests
       ]

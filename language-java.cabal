@@ -76,3 +76,5 @@ Test-Suite test-java-parse
                    , directory
                    , uniplate
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures
+  Other-modules:     BinOpTests
+                     TransformerTests
