@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
@@ -17,6 +18,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import TransformerTests (allTransformerTests)
+import Prelude hiding (exp)
 
 instance Arbitrary (CompilationUnit p) where
   arbitrary = CompilationUnit <$> arbitrary <*> arbitrary <*> ((: []) <$> arbitrary)
@@ -39,12 +41,117 @@ instance Arbitrary (ClassBody p) where
 instance Arbitrary Name where
   arbitrary = Name dummySourceSpan <$> (choose (1, 3) >>= \len -> NonEmpty.fromList <$> replicateM len arbitrary)
 
+instance Arbitrary ClassifiedName where
+  arbitrary = Unknown <$> arbitrary
+
+class (Arbitrary (XNameClassification x)) => ArbitraryExtension x
+
+instance ArbitraryExtension Parsed
+
+instance ArbitraryExtension Analyzed
+
 instance Arbitrary Ident where
   arbitrary = Ident dummySourceSpan . unkeyword <$> (choose (1, 15) >>= \len -> replicateM len (elements (['a' .. 'z'] ++ ['A' .. 'Z'])))
     where
       unkeyword k
-        | k `elem` ["if", "do", "then", "else"] = "x" ++ k
+        | k
+            `elem` [ "abstract",
+                     "assert",
+                     "boolean",
+                     "break",
+                     "byte",
+                     "case",
+                     "catch",
+                     "char",
+                     "class",
+                     "const",
+                     "continue",
+                     "default",
+                     "do",
+                     "double",
+                     "else",
+                     "enum",
+                     "extends",
+                     "final",
+                     "finally",
+                     "float",
+                     "for",
+                     "goto",
+                     "if",
+                     "implements",
+                     "import",
+                     "instanceof",
+                     "int",
+                     "interface",
+                     "long",
+                     "native",
+                     "new",
+                     "package",
+                     "private",
+                     "protected",
+                     "public",
+                     "record",
+                     "return",
+                     "short",
+                     "static",
+                     "strictfp",
+                     "super",
+                     "switch",
+                     "synchronized",
+                     "this",
+                     "throw",
+                     "throws",
+                     "transient",
+                     "try",
+                     "void",
+                     "volatile",
+                     "while"
+                   ] =
+            "x" ++ k
         | otherwise = k
+
+instance (ArbitraryExtension p) => Arbitrary (Exp p) where
+  arbitrary = sized exp'
+    where
+      exp' n
+        | n <= 0 = pure (Lit (Null dummySourceSpan))
+        | otherwise =
+            scale (`div` 2) $
+              oneof
+                [ ExpName <$> arbitrary,
+                  PrePlus dummySourceSpan <$> arbitrary,
+                  PreMinus dummySourceSpan <$> arbitrary,
+                  PreBitCompl dummySourceSpan <$> arbitrary,
+                  PreNot dummySourceSpan <$> arbitrary,
+                  BinOp dummySourceSpan <$> arbitrary <*> arbitrary <*> arbitrary
+                ]
+
+instance (ArbitraryExtension p) => Arbitrary (ArrayIndex p) where
+  arbitrary = ArrayIndex dummySourceSpan <$> arbitrary <*> arbitrary
+
+instance Arbitrary Op where
+  arbitrary =
+    elements
+      [ Mult,
+        Div,
+        Rem,
+        Add,
+        Sub,
+        LShift,
+        RShift,
+        RRShift,
+        LThan,
+        GThan,
+        LThanE,
+        GThanE,
+        Equal,
+        NotEq,
+        And,
+        Or,
+        Xor,
+        CAnd,
+        COr
+      ]
 
 ----------------------------------------------------------
 testJavaDirectory :: FilePath
@@ -88,9 +195,15 @@ main = do
         testGroup "parsing unit bad" (map (toTestCase ParseFull False) allBadJavas),
         testGroup "parsing shallow unit bad" (map (toTestCase ParseShallow False) shallowBadJavas),
         testProperty
-          "parsing.generating==id"
+          "parsing.generating==id (compilationUnit)"
           ( \g -> case parserWithState (ParserState ParseFull False) compilationUnit "<input>" (show $ pretty g) of
               Right g' -> eq IgnoreSourceSpan g g'
+              Left perr -> error (show (pretty g) ++ show perr)
+          ),
+        testProperty
+          "parsing.generating==id (exp)"
+          ( \g -> case parserWithState (ParserState ParseFull False) (fst <$> exp) "<input>" (show $ pretty g) of
+              Right g' -> counterexample (show $ pretty g) $ counterexample (show g') $ eq IgnoreSourceSpan g g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),
         testGroup "binary operators" testBinOp,
