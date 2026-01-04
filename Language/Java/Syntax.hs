@@ -26,6 +26,7 @@ module Language.Java.Syntax
     VarDeclId (..),
     VarInit (..),
     FormalParam (..),
+    CatchFormalParam (..),
     MethodBody (..),
     ConstructorBody (..),
     ExplConstrInv (..),
@@ -461,6 +462,24 @@ instance (EqualityExtension p) => Equality (FormalParam p) where
 instance Located (FormalParam p) where
   sourceSpan (FormalParam s _ _ _ _) = s
 
+-- | A formal parameter in catch clauses. Unlike formal parameters in
+--   method declarations, multiple types can be specified.
+data CatchFormalParam p = CatchFormalParam SourceSpan (NonEmpty ([Modifier p], Type)) VarDeclId
+  deriving (Typeable, Generic)
+
+deriving instance (ShowExtension p) => Show (CatchFormalParam p)
+
+deriving instance (ReadExtension p) => Read (CatchFormalParam p)
+
+deriving instance (DataExtension p) => Data (CatchFormalParam p)
+
+instance (EqualityExtension p) => Equality (CatchFormalParam p) where
+  eq opt (CatchFormalParam s1 t1 vdi1) (CatchFormalParam s2 t2 vdi2) =
+    eq opt s1 s2 && eq opt t1 t2 && eq opt vdi1 vdi2
+
+instance Located (CatchFormalParam p) where
+  sourceSpan (CatchFormalParam s _ _) = s
+
 -- | A method body is either a block of code that implements the method or simply a
 --   semicolon, indicating the lack of an implementation (modelled by 'Nothing').
 newtype MethodBody p = MethodBody (Maybe (Block p))
@@ -811,7 +830,7 @@ instance Located (Stmt p) where
 
 -- | If a value is thrown and the try statement has one or more catch clauses that can catch it, then control will be
 --   transferred to the first such catch clause.
-data Catch p = Catch (FormalParam p) (Block p)
+data Catch p = Catch (CatchFormalParam p) (Block p)
   deriving (Typeable, Generic)
 
 deriving instance (ShowExtension p) => Show (Catch p)

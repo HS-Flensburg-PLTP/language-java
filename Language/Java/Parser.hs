@@ -489,6 +489,13 @@ formalParam = do
   (vdi, loc) <- varDeclId
   return (FormalParam (startLoc, loc) ms typ var vdi)
 
+catchFormalParam :: P (CatchFormalParam Parsed)
+catchFormalParam = do
+  startLoc <- getLocation
+  typs <- seplist1NoLoc ((,) <$> list modifier <*> ttype) (tok Op_Or)
+  (vdi, loc) <- varDeclId
+  return (CatchFormalParam (startLoc, loc) typs vdi)
+
 ellipsis :: P ()
 ellipsis = period >> period >> period
 
@@ -950,7 +957,7 @@ switchExp = do
 catch :: P (Catch Parsed, Location)
 catch = do
   tok KW_Catch
-  fp <- noLoc (parens formalParam)
+  fp <- noLoc (parens catchFormalParam)
   (b, loc) <- block
   return (Catch fp b, loc)
 
