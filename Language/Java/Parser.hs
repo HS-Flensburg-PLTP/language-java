@@ -60,10 +60,10 @@ module Language.Java.Parser
   )
 where
 
-import Data.Functor ((<&>))
+import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Language.Java.Lexer (L1 (..), Token (..), lexer)
 import Language.Java.SourceSpan (Location (..), dummyLocation, locationEof)
 import Language.Java.Syntax
@@ -1032,7 +1032,7 @@ assignExp = try switchExp <|> try methodRef <|> try lambdaExp <|> try assignment
 condExp :: P (Exp Parsed, Location)
 condExp = do
   startLoc <- getLocation
-  infixExp |>> condExpSuffix startLoc
+  condOrExp |>> condExpSuffix startLoc
 
 condExpSuffix :: Location -> P (Exp Parsed -> Exp Parsed, Location)
 condExpSuffix startLoc = do
@@ -1042,33 +1042,39 @@ condExpSuffix startLoc = do
   (el, endLoc) <- condExp
   return (\ce -> Cond (startLoc, endLoc) ce th el, endLoc)
 
-infixExp :: P (Exp Parsed, Location)
-infixExp = do
+infixlExpList :: P (Exp Parsed, Location) -> P Op -> P (Exp Parsed, Location)
+infixlExpList p sep = do
   startLoc <- getLocation
-  unaryExp |>> infixExpSuffix startLoc
+  p |>> do
+    op <- sep
+    (e2, loc) <- p
+    return (\e1 -> BinOp (startLoc, loc) e1 op e2, loc)
 
-infixExpSuffix :: Location -> P (Exp Parsed -> Exp Parsed, Location)
-infixExpSuffix startLoc =
-  ( do
-      op <- infixCombineOp
-      (ie2, loc) <- infixExp
-      return (\ie1 -> BinOp (startLoc, loc) ie1 op ie2, loc)
-  )
-    <|> ( do
-            op <- infixOp
-            (e2, loc) <- unaryExp
-            return (\e1 -> BinOp (startLoc, loc) e1 op e2, loc)
-        )
-    <|> ( do
-            tok KW_Instanceof
-            (t, refLoc) <- refType
-            mNameLoc <- opt name
-            let (mName, loc) =
-                  case mNameLoc of
-                    Just (n, l) -> (Just n, l)
-                    Nothing -> (Nothing, refLoc)
-            return (\e1 -> InstanceOf (startLoc, loc) e1 t mName, loc)
-        )
+condOrExp, condAndExp, orExp, xorExp, andExp, eqExp, relExp, shiftExp, addExp, mulExp :: P (Exp Parsed, Location)
+condOrExp = infixlExpList condAndExp (tok Op_OOr $> COr)
+condAndExp = infixlExpList orExp (tok Op_AAnd $> CAnd)
+orExp = infixlExpList xorExp (tok Op_Or $> Or)
+xorExp = infixlExpList andExp (tok Op_Caret $> Xor)
+andExp = infixlExpList eqExp (tok Op_And $> And)
+eqExp = infixlExpList relExp ((tok Op_Equals $> Equal) <|> (tok Op_BangE $> NotEq))
+relExp = do
+  startLoc <- getLocation
+  (e, endLoc) <- infixlExpList shiftExp ((tok Op_LThan $> LThan) <|> (tok Op_GThan $> GThan) <|> (tok Op_LThanE $> LThanE) <|> (tok Op_GThanE $> GThanE))
+  fromMaybe (e, endLoc)
+    <$> opt
+      ( do
+          tok KW_Instanceof
+          (t, refLoc) <- refType
+          mNameLoc <- opt name
+          let (mName, loc) =
+                case mNameLoc of
+                  Just (n, l) -> (Just n, l)
+                  Nothing -> (Nothing, refLoc)
+          return (InstanceOf (startLoc, loc) e t mName, loc)
+      )
+shiftExp = infixlExpList addExp ((tok Op_LShift $> LShift) <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
+addExp = infixlExpList mulExp ((tok Op_Plus $> Add) <|> (tok Op_Minus $> Sub))
+mulExp = infixlExpList unaryExp ((tok Op_Star $> Mult) <|> (tok Op_Slash $> Div) <|> (tok Op_Percent $> Rem))
 
 unaryExp :: P (Exp Parsed, Location)
 unaryExp =
@@ -1513,42 +1519,6 @@ assignOp =
     <|> (tok Op_AndE >> return AndA)
     <|> (tok Op_CaretE >> return XorA)
     <|> (tok Op_OrE >> return OrA)
-
-infixCombineOp :: P Op
-infixCombineOp =
-  (tok Op_And >> return And)
-    <|> (tok Op_Caret >> return Xor)
-    <|> (tok Op_Or >> return Or)
-    <|> (tok Op_AAnd >> return CAnd)
-    <|> (tok Op_OOr >> return COr)
-
-infixOp :: P Op
-infixOp =
-  (tok Op_Star >> return Mult)
-    <|> (tok Op_Slash >> return Div)
-    <|> (tok Op_Percent >> return Rem)
-    <|> (tok Op_Plus >> return Add)
-    <|> (tok Op_Minus >> return Sub)
-    <|> (tok Op_LShift >> return LShift)
-    <|> (tok Op_LThan >> return LThan)
-    <|> try
-      ( do
-          tok Op_GThan
-          tok Op_GThan
-          tok Op_GThan
-          return RRShift
-      )
-    <|> try
-      ( do
-          tok Op_GThan
-          tok Op_GThan
-          return RShift
-      )
-    <|> (tok Op_GThan >> return GThan)
-    <|> (tok Op_LThanE >> return LThanE)
-    <|> (tok Op_GThanE >> return GThanE)
-    <|> (tok Op_Equals >> return Equal)
-    <|> (tok Op_BangE >> return NotEq)
 
 ----------------------------------------------------------------------------
 -- Types
