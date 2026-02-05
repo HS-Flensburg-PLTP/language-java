@@ -397,7 +397,7 @@ instance (PrettyExtension p) => Pretty (Exp p) where
   prettyPrec p (Cast _ t e) = parenPrec p 2 $ parens (prettyPrec p t) <+> prettyPrec 2 e
   prettyPrec p (BinOp _ e1 op e2) =
     let prec = opPrec op
-     in parenPrec p prec (prettyPrec prec e1 <+> prettyPrec p op <+> prettyPrec prec e2)
+     in parenPrec p prec (prettyPrec prec e1 <+> prettyPrec p op <+> prettyPrec (prec - 1) e2)
   prettyPrec p (InstanceOf _ e rt mName) =
     let cp = opPrec LThan
         prettyName =
