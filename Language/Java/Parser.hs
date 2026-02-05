@@ -70,6 +70,7 @@ import Language.Java.Syntax
 import Text.Parsec
   ( Parsec,
     State (stateInput, statePos),
+    chainl1,
     eof,
     getParserState,
     getState,
@@ -1045,10 +1046,9 @@ condExpSuffix startLoc = do
 infixlExpList :: P (Exp Parsed, Location) -> P Op -> P (Exp Parsed, Location)
 infixlExpList p sep = do
   startLoc <- getLocation
-  p |>> do
+  p `chainl1` do
     op <- sep
-    (e2, loc) <- p
-    return (\e1 -> BinOp (startLoc, loc) e1 op e2, loc)
+    return (\(e1, _) (e2, l2) -> (BinOp (startLoc, l2) e1 op e2, l2))
 
 condOrExp, condAndExp, orExp, xorExp, andExp, eqExp, relExp, shiftExp, addExp, mulExp :: P (Exp Parsed, Location)
 condOrExp = infixlExpList condAndExp (tok Op_OOr $> COr)
