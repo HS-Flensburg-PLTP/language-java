@@ -1049,16 +1049,35 @@ infixlExpList p sep = do
     op <- sep
     return (\(e1, _) (e2, l2) -> (BinOp (startLoc, l2) e1 op e2, l2))
 
-condOrExp, condAndExp, orExp, xorExp, andExp, eqExp, relExp, shiftExp, addExp, mulExp :: P (Exp Parsed, Location)
+condOrExp :: P (Exp Parsed, Location)
 condOrExp = infixlExpList condAndExp (attrTok Op_OOr COr)
+
+condAndExp :: P (Exp Parsed, Location)
 condAndExp = infixlExpList orExp (attrTok Op_AAnd CAnd)
+
+orExp :: P (Exp Parsed, Location)
 orExp = infixlExpList xorExp (attrTok Op_Or Or)
+
+xorExp :: P (Exp Parsed, Location)
 xorExp = infixlExpList andExp (attrTok Op_Caret Xor)
+
+andExp :: P (Exp Parsed, Location)
 andExp = infixlExpList eqExp (attrTok Op_And And)
+
+eqExp :: P (Exp Parsed, Location)
 eqExp = infixlExpList relExp (attrTok Op_Equals Equal <|> attrTok Op_BangE NotEq)
+
+relExp :: P (Exp Parsed, Location)
 relExp = do
   startLoc <- getLocation
-  (e, endLoc) <- infixlExpList shiftExp (attrTok Op_LThan LThan <|> attrTok Op_GThan GThan <|> attrTok Op_LThanE LThanE <|> attrTok Op_GThanE GThanE)
+  (e, endLoc) <-
+    infixlExpList
+      shiftExp
+      ( attrTok Op_LThan LThan
+          <|> attrTok Op_GThan GThan
+          <|> attrTok Op_LThanE LThanE
+          <|> attrTok Op_GThanE GThanE
+      )
   fromMaybe (e, endLoc)
     <$> opt
       ( do
@@ -1071,8 +1090,20 @@ relExp = do
                   Nothing -> (Nothing, refLoc)
           return (InstanceOf (startLoc, loc) e t mName, loc)
       )
-shiftExp = infixlExpList addExp (attrTok Op_LShift LShift <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
+
+shiftExp :: P (Exp Parsed, Location)
+shiftExp =
+  infixlExpList
+    addExp
+    ( attrTok Op_LShift LShift
+        <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift)
+        <|> try (tok Op_GThan >> tok Op_GThan $> RShift)
+    )
+
+addExp :: P (Exp Parsed, Location)
 addExp = infixlExpList mulExp (attrTok Op_Plus Add <|> attrTok Op_Minus Sub)
+
+mulExp :: P (Exp Parsed, Location)
 mulExp = infixlExpList unaryExp (attrTok Op_Star Mult <|> attrTok Op_Slash Div <|> attrTok Op_Percent Rem)
 
 unaryExp :: P (Exp Parsed, Location)
