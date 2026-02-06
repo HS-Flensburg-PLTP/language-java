@@ -2,7 +2,7 @@
 
 module Language.Java.Transformer (transformCompilationUnitToAnalyzed) where
 
-import Data.Bifunctor (Bifunctor (second))
+import Data.Bifunctor (Bifunctor (first, second))
 import Data.List (find)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -193,7 +193,7 @@ instance AnalyzedTransformer Catch where
   transformToAnalyzed scope (Catch formalParam block) =
     Catch
       (transformToAnalyzed scope formalParam)
-      (transformToAnalyzed (IdentCollection.addToFormalParams [FormalParam.ident formalParam] scope) block)
+      (transformToAnalyzed (IdentCollection.addToFormalParams [FormalParam.catchIdent formalParam] scope) block)
 
 instance AnalyzedTransformer Block where
   transformToAnalyzed scope (Block srcspan blockstmts) = Block srcspan (transformBlockStmtsToAnalyzed scope blockstmts)
@@ -329,6 +329,9 @@ instance AnalyzedTransformer BlockStmt where
 
 instance AnalyzedTransformer FormalParam where
   transformToAnalyzed scope (FormalParam srcspan modifiers type_ bool varDeclId) = FormalParam srcspan (map (transformToAnalyzed scope) modifiers) type_ bool varDeclId
+
+instance AnalyzedTransformer CatchFormalParam where
+  transformToAnalyzed scope (CatchFormalParam srcspan types varDeclId) = CatchFormalParam srcspan (NonEmpty.map (first (map (transformToAnalyzed scope))) types) varDeclId
 
 instance AnalyzedTransformer VarDecl where
   transformToAnalyzed scope (VarDecl srcspan varDeclId mbVarInit) = VarDecl srcspan varDeclId (fmap (transformToAnalyzed scope) mbVarInit)

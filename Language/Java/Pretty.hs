@@ -188,6 +188,13 @@ instance (PrettyExtension p) => Pretty (FormalParam p) where
         prettyPrec p vId
       ]
 
+instance (PrettyExtension p) => Pretty (CatchFormalParam p) where
+  prettyPrec p (CatchFormalParam _ ts vId) =
+    hsep
+      [ hsep (intersperse (text "|") $ map (\(m, t) -> hsep (map (prettyPrec p) m) <+> prettyPrec p t) (NonEmpty.toList ts)),
+        prettyPrec p vId
+      ]
+
 instance (PrettyExtension p) => Pretty (MethodBody p) where
   prettyPrec p (MethodBody mBlock) = maybe semi (prettyPrec p) mBlock
 
