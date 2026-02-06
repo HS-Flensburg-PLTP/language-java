@@ -1056,10 +1056,10 @@ condAndExp = infixlExpList orExp (tok Op_AAnd $> CAnd)
 orExp = infixlExpList xorExp (tok Op_Or $> Or)
 xorExp = infixlExpList andExp (tok Op_Caret $> Xor)
 andExp = infixlExpList eqExp (tok Op_And $> And)
-eqExp = infixlExpList relExp ((tok Op_Equals $> Equal) <|> (tok Op_BangE $> NotEq))
+eqExp = infixlExpList relExp (tok Op_Equals $> Equal <|> tok Op_BangE $> NotEq)
 relExp = do
   startLoc <- getLocation
-  (e, endLoc) <- infixlExpList shiftExp ((tok Op_LThan $> LThan) <|> (tok Op_GThan $> GThan) <|> (tok Op_LThanE $> LThanE) <|> (tok Op_GThanE $> GThanE))
+  (e, endLoc) <- infixlExpList shiftExp (tok Op_LThan $> LThan <|> tok Op_GThan $> GThan <|> tok Op_LThanE $> LThanE <|> tok Op_GThanE $> GThanE)
   fromMaybe (e, endLoc)
     <$> opt
       ( do
@@ -1072,9 +1072,9 @@ relExp = do
                   Nothing -> (Nothing, refLoc)
           return (InstanceOf (startLoc, loc) e t mName, loc)
       )
-shiftExp = infixlExpList addExp ((tok Op_LShift $> LShift) <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
-addExp = infixlExpList mulExp ((tok Op_Plus $> Add) <|> (tok Op_Minus $> Sub))
-mulExp = infixlExpList unaryExp ((tok Op_Star $> Mult) <|> (tok Op_Slash $> Div) <|> (tok Op_Percent $> Rem))
+shiftExp = infixlExpList addExp (tok Op_LShift $> LShift <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
+addExp = infixlExpList mulExp (tok Op_Plus $> Add <|> tok Op_Minus $> Sub)
+mulExp = infixlExpList unaryExp (tok Op_Star $> Mult <|> tok Op_Slash $> Div <|> tok Op_Percent $> Rem)
 
 unaryExp :: P (Exp Parsed, Location)
 unaryExp =
