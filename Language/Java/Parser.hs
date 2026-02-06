@@ -378,7 +378,7 @@ methodDecl = do
 methodBody :: P (MethodBody Parsed, Location)
 methodBody = onlySemi <|> fullBody
   where
-    onlySemi = attrTok SemiColon (MethodBody Nothing)
+    onlySemi = attrTokWithEndLoc SemiColon (MethodBody Nothing)
     fullBody = do
       (b, loc) <- block
       return (MethodBody (Just b), loc)
@@ -428,8 +428,7 @@ explConstrInv =
 --       That would give far better error messages.
 interfaceBodyDecl :: P (Maybe (MemberDecl Parsed))
 interfaceBodyDecl =
-  semiColon
-    >> return Nothing
+  semiColon $> Nothing
     <|> do
       loc <- getLocation
       ms <- list modifier
@@ -501,17 +500,17 @@ modifier =
     <|> ( do
             startLoc <- getLocation
             (constr, endLoc) <-
-              attrTok KW_Public Public
-                <|> attrTok KW_Private Private
-                <|> attrTok KW_Protected Protected
-                <|> attrTok KW_Abstract Abstract
-                <|> attrTok KW_Final Final
-                <|> attrTok KW_Static Static
-                <|> attrTok KW_Strictfp StrictFP
-                <|> attrTok KW_Transient Transient
-                <|> attrTok KW_Volatile Volatile
-                <|> attrTok KW_Native Native
-                <|> attrTok KW_Synchronized Synchronized_
+              attrTokWithEndLoc KW_Public Public
+                <|> attrTokWithEndLoc KW_Private Private
+                <|> attrTokWithEndLoc KW_Protected Protected
+                <|> attrTokWithEndLoc KW_Abstract Abstract
+                <|> attrTokWithEndLoc KW_Final Final
+                <|> attrTokWithEndLoc KW_Static Static
+                <|> attrTokWithEndLoc KW_Strictfp StrictFP
+                <|> attrTokWithEndLoc KW_Transient Transient
+                <|> attrTokWithEndLoc KW_Volatile Volatile
+                <|> attrTokWithEndLoc KW_Native Native
+                <|> attrTokWithEndLoc KW_Synchronized Synchronized_
                 <|> attrFixedIdent "sealed" Sealed
             return (constr (startLoc, endLoc))
         )
@@ -901,11 +900,11 @@ switchStmtOld = do
 
 switchLabelOld :: P (SwitchLabel Parsed, Location)
 switchLabelOld =
-  (tok KW_Default >> attrTok Op_Colon Default)
+  (tok KW_Default >> attrTokWithEndLoc Op_Colon Default)
     <|> ( do
             tok KW_Case
             es <- noLoc (seplist1 condExp comma)
-            attrTok Op_Colon (SwitchCase es)
+            attrTokWithEndLoc Op_Colon (SwitchCase es)
         )
 
 switchStmtNew :: P (SwitchBlock Parsed)
@@ -917,7 +916,7 @@ switchStmtNew = do
 
 switchLabelNew :: P (SwitchLabel Parsed)
 switchLabelNew =
-  (tok KW_Default >> tok LambdaArrow >> return Default)
+  tok KW_Default >> tok LambdaArrow $> Default
     <|> ( do
             tok KW_Case
             es <- noLoc (seplist1 condExp comma)
@@ -1051,15 +1050,15 @@ infixlExpList p sep = do
     return (\(e1, _) (e2, l2) -> (BinOp (startLoc, l2) e1 op e2, l2))
 
 condOrExp, condAndExp, orExp, xorExp, andExp, eqExp, relExp, shiftExp, addExp, mulExp :: P (Exp Parsed, Location)
-condOrExp = infixlExpList condAndExp (tok Op_OOr $> COr)
-condAndExp = infixlExpList orExp (tok Op_AAnd $> CAnd)
-orExp = infixlExpList xorExp (tok Op_Or $> Or)
-xorExp = infixlExpList andExp (tok Op_Caret $> Xor)
-andExp = infixlExpList eqExp (tok Op_And $> And)
-eqExp = infixlExpList relExp (tok Op_Equals $> Equal <|> tok Op_BangE $> NotEq)
+condOrExp = infixlExpList condAndExp (attrTok Op_OOr COr)
+condAndExp = infixlExpList orExp (attrTok Op_AAnd CAnd)
+orExp = infixlExpList xorExp (attrTok Op_Or Or)
+xorExp = infixlExpList andExp (attrTok Op_Caret Xor)
+andExp = infixlExpList eqExp (attrTok Op_And And)
+eqExp = infixlExpList relExp (attrTok Op_Equals Equal <|> attrTok Op_BangE NotEq)
 relExp = do
   startLoc <- getLocation
-  (e, endLoc) <- infixlExpList shiftExp (tok Op_LThan $> LThan <|> tok Op_GThan $> GThan <|> tok Op_LThanE $> LThanE <|> tok Op_GThanE $> GThanE)
+  (e, endLoc) <- infixlExpList shiftExp (attrTok Op_LThan LThan <|> attrTok Op_GThan GThan <|> attrTok Op_LThanE LThanE <|> attrTok Op_GThanE GThanE)
   fromMaybe (e, endLoc)
     <$> opt
       ( do
@@ -1072,9 +1071,9 @@ relExp = do
                   Nothing -> (Nothing, refLoc)
           return (InstanceOf (startLoc, loc) e t mName, loc)
       )
-shiftExp = infixlExpList addExp (tok Op_LShift $> LShift <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
-addExp = infixlExpList mulExp (tok Op_Plus $> Add <|> tok Op_Minus $> Sub)
-mulExp = infixlExpList unaryExp (tok Op_Star $> Mult <|> tok Op_Slash $> Div <|> tok Op_Percent $> Rem)
+shiftExp = infixlExpList addExp (attrTok Op_LShift LShift <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift) <|> try (tok Op_GThan >> tok Op_GThan $> RShift))
+addExp = infixlExpList mulExp (attrTok Op_Plus Add <|> attrTok Op_Minus Sub)
+mulExp = infixlExpList unaryExp (attrTok Op_Star Mult <|> attrTok Op_Slash Div <|> attrTok Op_Percent Rem)
 
 unaryExp :: P (Exp Parsed, Location)
 unaryExp =
@@ -1241,7 +1240,7 @@ methodRef = do
   startLoc <- getLocation
   n <- noLoc name
   tok MethodRefSep
-  (mrt, loc) <- attrTok KW_New MethodRefConstructor <|> mapFst MethodRefIdent <$> ident
+  (mrt, loc) <- attrTokWithEndLoc KW_New MethodRefConstructor <|> mapFst MethodRefIdent <$> ident
   return (MethodRef (startLoc, loc) n mrt, loc)
 
 {-
@@ -1495,30 +1494,30 @@ literal = do
 preIncDecOp, prefixOp, postfixOp :: P (Location -> Exp Parsed -> Exp Parsed, Location)
 preIncDecOp = do
   startLoc <- getLocation
-  (constr, endLoc) <- attrTok Op_PPlus PreIncrement <|> attrTok Op_MMinus PreDecrement
+  (constr, endLoc) <- attrTokWithEndLoc Op_PPlus PreIncrement <|> attrTokWithEndLoc Op_MMinus PreDecrement
   return (\expEndLoc -> constr (startLoc, expEndLoc), endLoc)
 prefixOp = do
   startLoc <- getLocation
-  (constr, endLoc) <- attrTok Op_Bang PreNot <|> attrTok Op_Tilde PreBitCompl <|> attrTok Op_Plus PrePlus <|> attrTok Op_Minus PreMinus
+  (constr, endLoc) <- attrTokWithEndLoc Op_Bang PreNot <|> attrTokWithEndLoc Op_Tilde PreBitCompl <|> attrTokWithEndLoc Op_Plus PrePlus <|> attrTokWithEndLoc Op_Minus PreMinus
   return (\expEndLoc -> constr (startLoc, expEndLoc), endLoc)
 postfixOp = do
-  (constr, endLoc) <- attrTok Op_PPlus PostIncrement <|> attrTok Op_MMinus PostDecrement
+  (constr, endLoc) <- attrTokWithEndLoc Op_PPlus PostIncrement <|> attrTokWithEndLoc Op_MMinus PostDecrement
   return (\expStartLoc -> constr (expStartLoc, endLoc), endLoc)
 
 assignOp :: P AssignOp
 assignOp =
-  (tok Op_Equal >> return EqualA)
-    <|> (tok Op_StarE >> return MultA)
-    <|> (tok Op_SlashE >> return DivA)
-    <|> (tok Op_PercentE >> return RemA)
-    <|> (tok Op_PlusE >> return AddA)
-    <|> (tok Op_MinusE >> return SubA)
-    <|> (tok Op_LShiftE >> return LShiftA)
-    <|> (tok Op_RShiftE >> return RShiftA)
-    <|> (tok Op_RRShiftE >> return RRShiftA)
-    <|> (tok Op_AndE >> return AndA)
-    <|> (tok Op_CaretE >> return XorA)
-    <|> (tok Op_OrE >> return OrA)
+  attrTok Op_Equal EqualA
+    <|> attrTok Op_StarE MultA
+    <|> attrTok Op_SlashE DivA
+    <|> attrTok Op_PercentE RemA
+    <|> attrTok Op_PlusE AddA
+    <|> attrTok Op_MinusE SubA
+    <|> attrTok Op_LShiftE LShiftA
+    <|> attrTok Op_RShiftE RShiftA
+    <|> attrTok Op_RRShiftE RRShiftA
+    <|> attrTok Op_AndE AndA
+    <|> attrTok Op_CaretE XorA
+    <|> attrTok Op_OrE OrA
 
 ----------------------------------------------------------------------------
 -- Types
@@ -1530,14 +1529,14 @@ primType :: P PrimType
 primType = do
   startLoc <- getLocation
   (constr, endLoc) <-
-    attrTok KW_Boolean BooleanT
-      <|> attrTok KW_Byte ByteT
-      <|> attrTok KW_Short ShortT
-      <|> attrTok KW_Int IntT
-      <|> attrTok KW_Long LongT
-      <|> attrTok KW_Char CharT
-      <|> attrTok KW_Float FloatT
-      <|> attrTok KW_Double DoubleT
+    attrTokWithEndLoc KW_Boolean BooleanT
+      <|> attrTokWithEndLoc KW_Byte ByteT
+      <|> attrTokWithEndLoc KW_Short ShortT
+      <|> attrTokWithEndLoc KW_Int IntT
+      <|> attrTokWithEndLoc KW_Long LongT
+      <|> attrTokWithEndLoc KW_Char CharT
+      <|> attrTokWithEndLoc KW_Float FloatT
+      <|> attrTokWithEndLoc KW_Double DoubleT
   return (constr (startLoc, endLoc))
 
 refType :: P (RefType, Location)
@@ -1592,7 +1591,7 @@ classTypeSpec = do
   return ((i, tas), loc)
 
 resultType :: P (Maybe Type)
-resultType = tok KW_Void >> return Nothing <|> Just <$> ttype <?> "resultType"
+resultType = attrTok KW_Void Nothing <|> Just <$> ttype <?> "resultType"
 
 refTypeList :: P (NonEmpty RefType)
 refTypeList = noLoc (seplist1 refType comma)
@@ -1756,8 +1755,11 @@ tok, matchToken :: Token -> P ()
 tok = matchToken
 matchToken t = javaToken (\r -> if r == t then Just () else Nothing)
 
-attrTok :: Token -> b -> P (b, Location)
-attrTok t constr =
+attrTok :: Token -> b -> P b
+attrTok t constr = tok t $> constr
+
+attrTokWithEndLoc :: Token -> b -> P (b, Location)
+attrTokWithEndLoc t constr =
   fmap (\(_, endLoc) -> (constr, endLoc)) (tokWithEndLoc t)
 
 tokWithEndLoc :: Token -> P ((), Location)
