@@ -511,13 +511,14 @@ instance (PrettyExtension p) => Pretty (FieldAccess p) where
     prettyPrec p name <> text "." <> prettyPrec p ident
 
 instance (PrettyExtension p) => Pretty (MethodInvocation p) where
-  prettyPrec p (MethodCall _ mName methodId args) =
+  prettyPrec p (MethodCall _ mName tArgs methodId args) =
     case mName of
       Nothing -> prettyPrec p methodId <> ppArgs p args
       Just name ->
         hcat
           [ prettyPrec p name,
             char '.',
+            ppTypeParams p tArgs,
             prettyPrec p methodId,
             ppArgs p args
           ]
