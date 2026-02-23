@@ -51,8 +51,8 @@ class AnalyzedTransformer a where
   transformToAnalyzed :: IdentCollection -> a Parsed -> a Analyzed
 
 instance AnalyzedTransformer MethodInvocation where
-  transformToAnalyzed scope (MethodCall srcspan Nothing idnt args) = MethodCall srcspan Nothing idnt (map (transformToAnalyzed scope) args)
-  transformToAnalyzed scope (MethodCall srcspan (Just name) idnt args) = MethodCall srcspan (Just (classifyName name scope)) idnt (map (transformToAnalyzed scope) args)
+  transformToAnalyzed scope (MethodCall srcspan Nothing refTypes idnt args) = MethodCall srcspan Nothing refTypes idnt (map (transformToAnalyzed scope) args)
+  transformToAnalyzed scope (MethodCall srcspan (Just name) refTypes idnt args) = MethodCall srcspan (Just (classifyName name scope)) refTypes idnt (map (transformToAnalyzed scope) args)
   transformToAnalyzed scope (PrimaryMethodCall srcspan expr refTypes idnt args) = PrimaryMethodCall srcspan (transformToAnalyzed scope expr) refTypes idnt (map (transformToAnalyzed scope) args)
   transformToAnalyzed scope (SuperMethodCall srcspan refTypes idnt args) = SuperMethodCall srcspan refTypes idnt (map (transformToAnalyzed scope) args)
   transformToAnalyzed scope (ClassMethodCall srcspan name refTypes idnt args) = ClassMethodCall srcspan name refTypes idnt (map (transformToAnalyzed scope) args)

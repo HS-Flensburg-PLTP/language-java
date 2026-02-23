@@ -1276,8 +1276,8 @@ instance (EqualityExtension p) => Equality (LambdaExpression p) where
 
 -- | A method invocation expression is used to invoke a class or instance method.
 data MethodInvocation p
-  = -- | Invoking a specific named method.
-    MethodCall SourceSpan (Maybe (XNameClassification p)) Ident [Argument p]
+  = -- | Invoking a specific named method, giving arguments for any generic type parameters.
+    MethodCall SourceSpan (Maybe (XNameClassification p)) [RefType] Ident [Argument p]
   | -- | Invoking a method of a class computed from a primary expression, giving arguments for any generic type parameters.
     PrimaryMethodCall SourceSpan (Exp p) [RefType] Ident [Argument p]
   | -- | Invoking a method of the super class, giving arguments for any generic type parameters.
@@ -1295,8 +1295,8 @@ deriving instance (ReadExtension p) => Read (MethodInvocation p)
 deriving instance (DataExtension p) => Data (MethodInvocation p)
 
 instance (EqualityExtension p) => Equality (MethodInvocation p) where
-  eq opt (MethodCall s1 mn1 i1 as1) (MethodCall s2 mn2 i2 as2) =
-    eq opt s1 s2 && eq opt mn1 mn2 && eq opt i1 i2 && eq opt as1 as2
+  eq opt (MethodCall s1 mn1 rts1 i1 as1) (MethodCall s2 mn2 rts2 i2 as2) =
+    eq opt s1 s2 && eq opt mn1 mn2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
   eq opt (PrimaryMethodCall s1 e1 rts1 i1 as1) (PrimaryMethodCall s2 e2 rts2 i2 as2) =
     eq opt s1 s2 && eq opt e1 e2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
   eq opt (SuperMethodCall s1 rts1 i1 as1) (SuperMethodCall s2 rts2 i2 as2) =
@@ -1308,7 +1308,7 @@ instance (EqualityExtension p) => Equality (MethodInvocation p) where
   eq _ _ _ = False
 
 instance Located (MethodInvocation p) where
-  sourceSpan (MethodCall s _ _ _) = s
+  sourceSpan (MethodCall s _ _ _ _) = s
   sourceSpan (PrimaryMethodCall s _ _ _ _) = s
   sourceSpan (SuperMethodCall s _ _ _) = s
   sourceSpan (ClassMethodCall s _ _ _ _) = s

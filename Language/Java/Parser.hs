@@ -406,22 +406,22 @@ explConstrInv =
   noLoc . endSemi $
     try
       ( do
-          tas <- neoptList refTypeArgs
+          rts <- neoptList refTypeArgs
           tok KW_This
-          ThisInvoke tas <$> noLoc args
+          ThisInvoke rts <$> noLoc args
       )
       <|> try
         ( do
-            tas <- neoptList refTypeArgs
+            rts <- neoptList refTypeArgs
             tok KW_Super
-            SuperInvoke tas <$> noLoc args
+            SuperInvoke rts <$> noLoc args
         )
       <|> ( do
               pri <- noLoc primary
               period
-              tas <- neoptList refTypeArgs
+              rts <- neoptList refTypeArgs
               tok KW_Super
-              PrimarySuperInvoke pri tas <$> noLoc args
+              PrimarySuperInvoke pri rts <$> noLoc args
           )
 
 -- TODO: This should be parsed like class bodies, and post-checked.
@@ -1367,9 +1367,9 @@ methodInvocationNPS = do
       return (SuperMethodCall (startLoc, loc) rts i as, loc)
     )
     <|> ( do
-            (mn, i) <- qualifiedMethodName
+            (mn, rts, i) <- qualifiedMethodName
             (as, loc) <- args
-            return (MethodCall (startLoc, loc) mn i as, loc)
+            return (MethodCall (startLoc, loc) mn rts i as, loc)
         )
     <|> ( do
             n <- noLoc name
@@ -1382,34 +1382,34 @@ methodInvocationNPS = do
             return (constr (startLoc, loc) n rts i as, loc)
         )
 
-qualifiedMethodName :: P (Maybe Name, Ident)
+qualifiedMethodName :: P (Maybe Name, [RefType], Ident)
 qualifiedMethodName = do
   startLoc <- getLocation
-  mapFst
-    ( \case
+  (mn, rts, i) <- go startLoc []
+  let mn' = case mn of
         ([], _) -> Nothing
         (is, endLoc) -> Just (Name (startLoc, endLoc) (NonEmpty.fromList (reverse is)))
-    )
-    <$> go startLoc []
+  return (mn', rts, i)
   where
-    go :: Location -> [Ident] -> P (([Ident], Location), Ident)
+    go :: Location -> [Ident] -> P (([Ident], Location), [RefType], Ident)
     go endLoc nids = do
       (i, loc) <- ident
-      try
-        ( do
-            period
-            go loc (i : nids)
+      ( do
+          rts <- try (period >> refTypeArgs)
+          i' <- noLoc ident
+          return ((i : nids, loc), NonEmpty.toList rts, i')
         )
-        <|> return ((nids, endLoc), i)
+        <|> try (period >> go loc (i : nids))
+        <|> return ((nids, endLoc), [], i)
 
 methodInvocationSuffix :: P (Exp Parsed -> MethodInvocation Parsed, Location)
 methodInvocationSuffix = do
   startLoc <- getLocation
   period
-  _ <- neoptList refTypeArgs
+  rts <- neoptList refTypeArgs
   i <- noLoc ident
   (as, loc) <- args
-  return (\p -> PrimaryMethodCall (startLoc, loc) p [] i as, loc)
+  return (\p -> PrimaryMethodCall (startLoc, loc) p rts i as, loc)
 
 methodInvocationExp :: P (Exp Parsed)
 methodInvocationExp =
