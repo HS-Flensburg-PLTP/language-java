@@ -40,61 +40,61 @@ tokens  :-
     $white+         ;
     @comm           ;
 
-    "@interface"    { \p _ -> L (mkPos p) $ Right KW_AnnInterface }
-    abstract        { \p _ -> L (mkPos p) $ Right KW_Abstract     }
-    assert          { \p _ -> L (mkPos p) $ Right KW_Assert       }
-    boolean         { \p _ -> L (mkPos p) $ Right KW_Boolean      }
-    break           { \p _ -> L (mkPos p) $ Right KW_Break        }
-    byte            { \p _ -> L (mkPos p) $ Right KW_Byte         }
-    case            { \p _ -> L (mkPos p) $ Right KW_Case         }
-    catch           { \p _ -> L (mkPos p) $ Right KW_Catch        }
-    char            { \p _ -> L (mkPos p) $ Right KW_Char         }
-    class           { \p _ -> L (mkPos p) $ Right KW_Class        }
-    const           { \p _ -> L (mkPos p) $ Right KW_Const        }
-    continue        { \p _ -> L (mkPos p) $ Right KW_Continue     }
-    default         { \p _ -> L (mkPos p) $ Right KW_Default      }
-    do              { \p _ -> L (mkPos p) $ Right KW_Do           }
-    double          { \p _ -> L (mkPos p) $ Right KW_Double       }
-    else            { \p _ -> L (mkPos p) $ Right KW_Else         }
-    enum            { \p _ -> L (mkPos p) $ Right KW_Enum         }
-    extends         { \p _ -> L (mkPos p) $ Right KW_Extends      }
-    final           { \p _ -> L (mkPos p) $ Right KW_Final        }
-    finally         { \p _ -> L (mkPos p) $ Right KW_Finally      }
-    float           { \p _ -> L (mkPos p) $ Right KW_Float        }
-    for             { \p _ -> L (mkPos p) $ Right KW_For          }
-    goto            { \p _ -> L (mkPos p) $ Right KW_Goto         }
-    if              { \p _ -> L (mkPos p) $ Right KW_If           }
-    implements      { \p _ -> L (mkPos p) $ Right KW_Implements   }
-    import          { \p _ -> L (mkPos p) $ Right KW_Import       }
-    instanceof      { \p _ -> L (mkPos p) $ Right KW_Instanceof   }
-    int             { \p _ -> L (mkPos p) $ Right KW_Int          }
-    interface       { \p _ -> L (mkPos p) $ Right KW_Interface    }
-    long            { \p _ -> L (mkPos p) $ Right KW_Long         }
-    native          { \p _ -> L (mkPos p) $ Right KW_Native       }
-    new             { \p _ -> L (mkPos p) $ Right KW_New          }
-    package         { \p _ -> L (mkPos p) $ Right KW_Package      }
-    private         { \p _ -> L (mkPos p) $ Right KW_Private      }
-    protected       { \p _ -> L (mkPos p) $ Right KW_Protected    }
-    public          { \p _ -> L (mkPos p) $ Right KW_Public       }
-    record          { \p _ -> L (mkPos p) $ Right KW_Record       }
-    return          { \p _ -> L (mkPos p) $ Right KW_Return       }
-    short           { \p _ -> L (mkPos p) $ Right KW_Short        }
-    static          { \p _ -> L (mkPos p) $ Right KW_Static       }
-    strictfp        { \p _ -> L (mkPos p) $ Right KW_Strictfp     }
-    super           { \p _ -> L (mkPos p) $ Right KW_Super        }
-    switch          { \p _ -> L (mkPos p) $ Right KW_Switch       }
-    synchronized    { \p _ -> L (mkPos p) $ Right KW_Synchronized }
-    this            { \p _ -> L (mkPos p) $ Right KW_This         }
-    throw           { \p _ -> L (mkPos p) $ Right KW_Throw        }
-    throws          { \p _ -> L (mkPos p) $ Right KW_Throws       }
-    transient       { \p _ -> L (mkPos p) $ Right KW_Transient    }
-    try             { \p _ -> L (mkPos p) $ Right KW_Try          }
-    void            { \p _ -> L (mkPos p) $ Right KW_Void         }
-    volatile        { \p _ -> L (mkPos p) $ Right KW_Volatile     }
-    while           { \p _ -> L (mkPos p) $ Right KW_While        }
+    "@interface"    { plainTok KW_AnnInterface }
+    abstract        { plainTok KW_Abstract     }
+    assert          { plainTok KW_Assert       }
+    boolean         { plainTok KW_Boolean      }
+    break           { plainTok KW_Break        }
+    byte            { plainTok KW_Byte         }
+    case            { plainTok KW_Case         }
+    catch           { plainTok KW_Catch        }
+    char            { plainTok KW_Char         }
+    class           { plainTok KW_Class        }
+    const           { plainTok KW_Const        }
+    continue        { plainTok KW_Continue     }
+    default         { plainTok KW_Default      }
+    do              { plainTok KW_Do           }
+    double          { plainTok KW_Double       }
+    else            { plainTok KW_Else         }
+    enum            { plainTok KW_Enum         }
+    extends         { plainTok KW_Extends      }
+    final           { plainTok KW_Final        }
+    finally         { plainTok KW_Finally      }
+    float           { plainTok KW_Float        }
+    for             { plainTok KW_For          }
+    goto            { plainTok KW_Goto         }
+    if              { plainTok KW_If           }
+    implements      { plainTok KW_Implements   }
+    import          { plainTok KW_Import       }
+    instanceof      { plainTok KW_Instanceof   }
+    int             { plainTok KW_Int          }
+    interface       { plainTok KW_Interface    }
+    long            { plainTok KW_Long         }
+    native          { plainTok KW_Native       }
+    new             { plainTok KW_New          }
+    package         { plainTok KW_Package      }
+    private         { plainTok KW_Private      }
+    protected       { plainTok KW_Protected    }
+    public          { plainTok KW_Public       }
+    record          { plainTok KW_Record       }
+    return          { plainTok KW_Return       }
+    short           { plainTok KW_Short        }
+    static          { plainTok KW_Static       }
+    strictfp        { plainTok KW_Strictfp     }
+    super           { plainTok KW_Super        }
+    switch          { plainTok KW_Switch       }
+    synchronized    { plainTok KW_Synchronized }
+    this            { plainTok KW_This         }
+    throw           { plainTok KW_Throw        }
+    throws          { plainTok KW_Throws       }
+    transient       { plainTok KW_Transient    }
+    try             { plainTok KW_Try          }
+    void            { plainTok KW_Void         }
+    volatile        { plainTok KW_Volatile     }
+    while           { plainTok KW_While        }
 
-    0               { \p _ -> L (mkPos p) $ Right $ IntTok 0        }
-    0 [lL]          { \p _ -> L (mkPos p) $ Right $ LongTok 0       }
+    0               { plainTok (IntTok 0)        }
+    0 [lL]          { plainTok (LongTok 0)       }
     0 $digitUnder+               { \p s -> parseNum p readOct s IntTok }
     0 $digitUnder+ [lL]          { \p s -> parseNum p readOct (init s) LongTok }
     $nonzero $digitUnder*        { \p s -> parseNum p reads s IntTok }
@@ -112,71 +112,74 @@ tokens  :-
     0 [xX] $hexdig? $hexdigUnder* \.? $hexdig? $hexdigUnder* @pexponent [dD]?     { \p s -> readHexExp p (drop 2 (dropDoubleSuffix s)) DoubleTok }
     0 [xX] $hexdig? $hexdigUnder* \.? $hexdig? $hexdigUnder* @pexponent [fF]      { \p s -> readHexExp p (drop 2 (init s)) FloatTok }
 
-    true            { \p _ -> L (mkPos p) $ Right $ BoolTok True    }
-    false           { \p _ -> L (mkPos p) $ Right $ BoolTok False   }
+    true            { plainTok (BoolTok True)    }
+    false           { plainTok (BoolTok False)   }
 
-    ' (@charEscape | ~[\\\']) '               { \p s -> readCharTok p s }
+    ' (@charEscape | ~[\\\']) '               { readCharTok }
 
-    \" (@charEscape | ~[\\\"])* \"            { \p s -> readStringTok p s }
+    \" (@charEscape | ~[\\\"])* \"            { readStringTok }
 
-    null            {\p _ -> L (mkPos p) $ Right $ NullTok }
+    null            { plainTok NullTok }
 
     $javaLetter $javaLetterOrDigit*     { \p s -> L (mkPos p) $ Right $ IdentTok s }
 
-    \(              { \p _ -> L (mkPos p) $ Right $ OpenParen       }
-    \)              { \p _ -> L (mkPos p) $ Right $ CloseParen      }
-    \[              { \p _ -> L (mkPos p) $ Right $ OpenSquare      }
-    \]              { \p _ -> L (mkPos p) $ Right $ CloseSquare     }
-    \{              { \p _ -> L (mkPos p) $ Right $ OpenCurly       }
-    \}              { \p _ -> L (mkPos p) $ Right $ CloseCurly      }
-    \;              { \p _ -> L (mkPos p) $ Right $ SemiColon       }
-    \,              { \p _ -> L (mkPos p) $ Right $ Comma           }
-    \.              { \p _ -> L (mkPos p) $ Right $ Period          }
-    "->"            { \p _ -> L (mkPos p) $ Right $ LambdaArrow     }
-    "::"            { \p _ -> L (mkPos p) $ Right $ MethodRefSep    }
+    \(              { plainTok OpenParen       }
+    \)              { plainTok CloseParen      }
+    \[              { plainTok OpenSquare      }
+    \]              { plainTok CloseSquare     }
+    \{              { plainTok OpenCurly       }
+    \}              { plainTok CloseCurly      }
+    \;              { plainTok SemiColon       }
+    \,              { plainTok Comma           }
+    \.              { plainTok Period          }
+    "->"            { plainTok LambdaArrow     }
+    "::"            { plainTok MethodRefSep    }
 
-    "="             { \p _ -> L (mkPos p) $ Right $ Op_Equal        }
-    ">"             { \p _ -> L (mkPos p) $ Right $ Op_GThan        }
-    "<"             { \p _ -> L (mkPos p) $ Right $ Op_LThan        }
-    "!"             { \p _ -> L (mkPos p) $ Right $ Op_Bang         }
-    "~"             { \p _ -> L (mkPos p) $ Right $ Op_Tilde        }
-    "?"             { \p _ -> L (mkPos p) $ Right $ Op_Query        }
-    ":"             { \p _ -> L (mkPos p) $ Right $ Op_Colon        }
-    "=="            { \p _ -> L (mkPos p) $ Right $ Op_Equals       }
-    "<="            { \p _ -> L (mkPos p) $ Right $ Op_LThanE       }
-    ">="            { \p _ -> L (mkPos p) $ Right $ Op_GThanE       }
-    "!="            { \p _ -> L (mkPos p) $ Right $ Op_BangE        }
-    "&&"            { \p _ -> L (mkPos p) $ Right $ Op_AAnd         }
-    "||"            { \p _ -> L (mkPos p) $ Right $ Op_OOr          }
-    "++"            { \p _ -> L (mkPos p) $ Right $ Op_PPlus        }
-    "--"            { \p _ -> L (mkPos p) $ Right $ Op_MMinus       }
-    "+"             { \p _ -> L (mkPos p) $ Right $ Op_Plus         }
-    "-"             { \p _ -> L (mkPos p) $ Right $ Op_Minus        }
-    "*"             { \p _ -> L (mkPos p) $ Right $ Op_Star         }
-    "/"             { \p _ -> L (mkPos p) $ Right $ Op_Slash        }
-    "&"             { \p _ -> L (mkPos p) $ Right $ Op_And          }
-    "|"             { \p _ -> L (mkPos p) $ Right $ Op_Or           }
-    "^"             { \p _ -> L (mkPos p) $ Right $ Op_Caret        }
-    "%"             { \p _ -> L (mkPos p) $ Right $ Op_Percent      }
-    "<<"            { \p _ -> L (mkPos p) $ Right $ Op_LShift       }
-    "+="            { \p _ -> L (mkPos p) $ Right $ Op_PlusE        }
-    "-="            { \p _ -> L (mkPos p) $ Right $ Op_MinusE       }
-    "*="            { \p _ -> L (mkPos p) $ Right $ Op_StarE        }
-    "/="            { \p _ -> L (mkPos p) $ Right $ Op_SlashE       }
-    "&="            { \p _ -> L (mkPos p) $ Right $ Op_AndE         }
-    "|="            { \p _ -> L (mkPos p) $ Right $ Op_OrE          }
-    "^="            { \p _ -> L (mkPos p) $ Right $ Op_CaretE       }
-    "%="            { \p _ -> L (mkPos p) $ Right $ Op_PercentE     }
-    "<<="           { \p _ -> L (mkPos p) $ Right $ Op_LShiftE      }
-    ">>="           { \p _ -> L (mkPos p) $ Right $ Op_RShiftE      }
-    ">>>="          { \p _ -> L (mkPos p) $ Right $ Op_RRShiftE     }
-    "@"             { \p _ -> L (mkPos p) $ Right $ Op_AtSign       }
+    "="             { plainTok Op_Equal        }
+    ">"             { plainTok Op_GThan        }
+    "<"             { plainTok Op_LThan        }
+    "!"             { plainTok Op_Bang         }
+    "~"             { plainTok Op_Tilde        }
+    "?"             { plainTok Op_Query        }
+    ":"             { plainTok Op_Colon        }
+    "=="            { plainTok Op_Equals       }
+    "<="            { plainTok Op_LThanE       }
+    ">="            { plainTok Op_GThanE       }
+    "!="            { plainTok Op_BangE        }
+    "&&"            { plainTok Op_AAnd         }
+    "||"            { plainTok Op_OOr          }
+    "++"            { plainTok Op_PPlus        }
+    "--"            { plainTok Op_MMinus       }
+    "+"             { plainTok Op_Plus         }
+    "-"             { plainTok Op_Minus        }
+    "*"             { plainTok Op_Star         }
+    "/"             { plainTok Op_Slash        }
+    "&"             { plainTok Op_And          }
+    "|"             { plainTok Op_Or           }
+    "^"             { plainTok Op_Caret        }
+    "%"             { plainTok Op_Percent      }
+    "<<"            { plainTok Op_LShift       }
+    "+="            { plainTok Op_PlusE        }
+    "-="            { plainTok Op_MinusE       }
+    "*="            { plainTok Op_StarE        }
+    "/="            { plainTok Op_SlashE       }
+    "&="            { plainTok Op_AndE         }
+    "|="            { plainTok Op_OrE          }
+    "^="            { plainTok Op_CaretE       }
+    "%="            { plainTok Op_PercentE     }
+    "<<="           { plainTok Op_LShiftE      }
+    ">>="           { plainTok Op_RShiftE      }
+    ">>>="          { plainTok Op_RRShiftE     }
+    "@"             { plainTok Op_AtSign       }
 
 
 {
 
 type GenTokResult a = L (Either String a)
 type TokResult = GenTokResult Token
+
+plainTok :: Token -> AlexPosn -> String -> TokResult
+plainTok t p _ = L (mkPos p) $ Right t
 
 dropDoubleSuffix :: String -> String
 dropDoubleSuffix s =
