@@ -20,10 +20,10 @@ data ClassInfo = ClassInfo
   deriving (Show)
 
 hasField :: Ident -> ClassInfo -> Bool
-hasField idnt classInfo = any (eq IgnoreSourceSpan idnt) (ciFields classInfo)
+hasField idnt classInfo = idnt `elem` ciFields classInfo
 
 hasIdent :: Ident -> ClassInfo -> Bool
-hasIdent idnt classInfo = eq IgnoreSourceSpan idnt (ciIdent classInfo)
+hasIdent idnt classInfo = idnt == ciIdent classInfo
 
 fromClassDecl :: ClassDecl p -> ClassInfo
 fromClassDecl (ClassDecl _ _ idnt _ _ _ (ClassBody decls)) =

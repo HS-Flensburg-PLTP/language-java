@@ -585,11 +585,8 @@ instance Pretty TypeArgument where
 
 instance Pretty TypeDeclSpecifier where
   prettyPrec p (TypeDeclSpecifier ct) = prettyPrec p ct
-  prettyPrec p (TypeDeclSpecifierWithDiamond ct i d) = prettyPrec p ct <> char '.' <> prettyPrec p i <> prettyPrec p d
-  prettyPrec p (TypeDeclSpecifierUnqualifiedWithDiamond i d) = prettyPrec p i <> prettyPrec p d
-
-instance Pretty Diamond where
-  prettyPrec _ Diamond = text "<>"
+  prettyPrec p (TypeDeclSpecifierWithDiamond ct i) = prettyPrec p ct <> char '.' <> prettyPrec p i <> text "<>"
+  prettyPrec p (TypeDeclSpecifierUnqualifiedWithDiamond i) = prettyPrec p i <> text "<>"
 
 instance Pretty WildcardBound where
   prettyPrec p (ExtendsBound rt) = text "extends" <+> prettyPrec p rt

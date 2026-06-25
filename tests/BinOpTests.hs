@@ -63,7 +63,7 @@ testRoundTrip e = testCaseInfo (prettyExplicit e) $
   case parserWithState (ParserState ParseFull False) exp "" (show (pretty e)) of
     Left err -> assertFailure (show err)
     Right (e', _) -> do
-      eq IgnoreSourceSpan e e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'
+      e == e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'
       pure ("pretty-printed: " ++ show (pretty e))
 
 prettyExplicit :: Exp Parsed -> String

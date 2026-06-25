@@ -3,7 +3,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -61,7 +60,6 @@ module Language.Java.Syntax
     ClassType (..),
     TypeArgument (..),
     TypeDeclSpecifier (..),
-    Diamond (..),
     WildcardBound (..),
     PrimType (..),
     Literal (..),
@@ -72,7 +70,6 @@ module Language.Java.Syntax
     ClassifiedName (..),
     Op (..),
     AssignOp (..),
-    module Language.Java.Equality,
     Parsed,
     Analyzed,
     XNameClassification,
@@ -82,7 +79,6 @@ where
 import Data.Data
 import Data.List.NonEmpty (NonEmpty)
 import GHC.Generics (Generic)
-import Language.Java.Equality
 import Language.Java.SourceSpan
 
 -----------------------------------------------------------------------
@@ -102,23 +98,17 @@ instance ShowExtension Parsed
 
 instance ShowExtension Analyzed
 
-class (Read (XNameClassification x)) => ReadExtension x
-
-instance ReadExtension Parsed
-
-instance ReadExtension Analyzed
-
 class (Data x, Data (XNameClassification x)) => DataExtension x
 
 instance DataExtension Parsed
 
 instance DataExtension Analyzed
 
-class (Equality (XNameClassification x)) => EqualityExtension x
+class (Eq (XNameClassification x)) => EqExtension x
 
-instance EqualityExtension Parsed
+instance EqExtension Parsed
 
-instance EqualityExtension Analyzed
+instance EqExtension Analyzed
 
 class (Located (XNameClassification x)) => LocatedExtension x
 
@@ -131,25 +121,11 @@ instance LocatedExtension Analyzed
 
 -- | A compilation unit is the top level syntactic goal symbol of a Java program.
 data CompilationUnit p = CompilationUnit (Maybe PackageDecl) [ImportDecl] [TypeDecl p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (CompilationUnit p)
-
-deriving instance (ReadExtension p) => Read (CompilationUnit p)
-
-deriving instance (DataExtension p) => Data (CompilationUnit p)
-
-instance (EqualityExtension p) => Equality (CompilationUnit p) where
-  eq opt (CompilationUnit mpd1 ids1 tds1) (CompilationUnit mpd2 ids2 tds2) =
-    eq opt mpd1 mpd2 && eq opt ids1 ids2 && eq opt tds1 tds2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | A package declaration appears within a compilation unit to indicate the package to which the compilation unit belongs.
 newtype PackageDecl = PackageDecl Name
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality PackageDecl where
-  eq opt (PackageDecl n1) (PackageDecl n2) =
-    eq opt n1 n2
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | An import declaration allows a static member or a named type to be referred to by a single unqualified identifier.
 --   The first argument signals whether the declaration only imports static members.
@@ -157,11 +133,11 @@ instance Equality PackageDecl where
 --   a single name into scope.
 data ImportDecl
   = ImportDecl SourceSpan Bool {- static? -} Name Bool {- .*? -}
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality ImportDecl where
-  eq opt (ImportDecl s1 b11 n1 b12) (ImportDecl s2 b21 n2 b22) =
-    eq opt s1 s2 && b11 == b21 && eq opt n1 n2 && b12 == b22
+instance Eq ImportDecl where
+  ImportDecl _ b11 n1 b12 == ImportDecl _ b21 n2 b22 =
+    b11 == b21 && n1 == n2 && b12 == b22
 
 instance Located ImportDecl where
   sourceSpan (ImportDecl s _ _ _) = s
@@ -173,20 +149,7 @@ instance Located ImportDecl where
 data TypeDecl p
   = ClassTypeDecl (ClassDecl p)
   | InterfaceTypeDecl (InterfaceDecl p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (TypeDecl p)
-
-deriving instance (ReadExtension p) => Read (TypeDecl p)
-
-deriving instance (DataExtension p) => Data (TypeDecl p)
-
-instance (EqualityExtension p) => Equality (TypeDecl p) where
-  eq opt (ClassTypeDecl cd1) (ClassTypeDecl cd2) =
-    eq opt cd1 cd2
-  eq opt (InterfaceTypeDecl id1) (InterfaceTypeDecl id2) =
-    eq opt id1 id2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 instance Located (TypeDecl p) where
   sourceSpan (ClassTypeDecl cd) = sourceSpan cd
@@ -197,22 +160,16 @@ data ClassDecl p
   = ClassDecl SourceSpan [Modifier p] Ident [TypeParam] (Maybe RefType) [RefType] (ClassBody p)
   | RecordDecl SourceSpan [Modifier p] Ident [TypeParam] [RecordFieldDecl] [RefType] (ClassBody p)
   | EnumDecl SourceSpan [Modifier p] Ident [RefType] (EnumBody p)
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (ClassDecl p)
-
-deriving instance (ReadExtension p) => Read (ClassDecl p)
-
-deriving instance (DataExtension p) => Data (ClassDecl p)
-
-instance (EqualityExtension p) => Equality (ClassDecl p) where
-  eq opt (ClassDecl s1 ms1 i1 tps1 mrt1 rts1 cb1) (ClassDecl s2 ms2 i2 tps2 mrt2 rts2 cb2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt i1 i2 && eq opt tps1 tps2 && eq opt mrt1 mrt2 && eq opt rts1 rts2 && eq opt cb1 cb2
-  eq opt (RecordDecl s1 ms1 i1 tps1 rfds1 rts1 cb1) (RecordDecl s2 ms2 i2 tps2 rfds2 rts2 cb2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt i1 i2 && eq opt tps1 tps2 && eq opt rfds1 rfds2 && eq opt rts1 rts2 && eq opt cb1 cb2
-  eq opt (EnumDecl s1 ms1 i1 rts1 eb1) (EnumDecl s2 ms2 i2 rts2 eb2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt i1 i2 && eq opt rts1 rts2 && eq opt eb1 eb2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (ClassDecl p) where
+  ClassDecl _ ms1 i1 tps1 mrt1 rts1 cb1 == ClassDecl _ ms2 i2 tps2 mrt2 rts2 cb2 =
+    ms1 == ms2 && i1 == i2 && tps1 == tps2 && mrt1 == mrt2 && rts1 == rts2 && cb1 == cb2
+  RecordDecl _ ms1 i1 tps1 rfds1 rts1 cb1 == RecordDecl _ ms2 i2 tps2 rfds2 rts2 cb2 =
+    ms1 == ms2 && i1 == i2 && tps1 == tps2 && rfds1 == rfds2 && rts1 == rts2 && cb1 == cb2
+  EnumDecl _ ms1 i1 rts1 eb1 == EnumDecl _ ms2 i2 rts2 eb2 =
+    ms1 == ms2 && i1 == i2 && rts1 == rts2 && eb1 == eb2
+  _ == _ = False
 
 instance Located (ClassDecl p) where
   sourceSpan (ClassDecl s _ _ _ _ _ _) = s
@@ -224,45 +181,15 @@ instance Located (ClassDecl p) where
 --   A class body may also contain instance initializers, static
 --   initializers, and declarations of constructors for the class.
 newtype ClassBody p = ClassBody [Decl p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (ClassBody p)
-
-deriving instance (ReadExtension p) => Read (ClassBody p)
-
-deriving instance (DataExtension p) => Data (ClassBody p)
-
-instance (EqualityExtension p) => Equality (ClassBody p) where
-  eq opt (ClassBody ds1) (ClassBody ds2) =
-    eq opt ds1 ds2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | The body of an enum type may contain enum constants.
 data EnumBody p = EnumBody [EnumConstant p] [Decl p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (EnumBody p)
-
-deriving instance (ReadExtension p) => Read (EnumBody p)
-
-deriving instance (DataExtension p) => Data (EnumBody p)
-
-instance (EqualityExtension p) => Equality (EnumBody p) where
-  eq opt (EnumBody ecs1 ds1) (EnumBody ecs2 ds2) =
-    eq opt ecs1 ecs2 && eq opt ds1 ds2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | An enum constant defines an instance of the enum type.
 data EnumConstant p = EnumConstant Ident [Argument p] (Maybe (ClassBody p))
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (EnumConstant p)
-
-deriving instance (ReadExtension p) => Read (EnumConstant p)
-
-deriving instance (DataExtension p) => Data (EnumConstant p)
-
-instance (EqualityExtension p) => Equality (EnumConstant p) where
-  eq opt (EnumConstant i1 as1 mcb1) (EnumConstant i2 as2 mcb2) =
-    eq opt i1 i2 && eq opt as1 as2 && eq opt mcb1 mcb2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | An interface declaration introduces a new reference type whose members
 --   are classes, interfaces, constants and abstract methods. This type has
@@ -270,64 +197,35 @@ instance (EqualityExtension p) => Equality (EnumConstant p) where
 --   providing implementations for its abstract methods.
 data InterfaceDecl p
   = InterfaceDecl SourceSpan InterfaceKind [Modifier p] Ident [TypeParam] [RefType {- extends -}] [RefType {- permits -}] (InterfaceBody p)
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (InterfaceDecl p)
-
-deriving instance (ReadExtension p) => Read (InterfaceDecl p)
-
-deriving instance (DataExtension p) => Data (InterfaceDecl p)
-
-instance (EqualityExtension p) => Equality (InterfaceDecl p) where
-  eq opt (InterfaceDecl s1 ik1 ms1 i1 tps1 rts11 rts12 ib1) (InterfaceDecl s2 ik2 ms2 i2 tps2 rts21 rts22 ib2) =
-    eq opt s1 s2 && eq opt ik1 ik2 && eq opt ms1 ms2 && eq opt i1 i2 && eq opt tps1 tps2 && eq opt rts11 rts21 && eq opt rts12 rts22 && eq opt ib1 ib2
+instance (EqExtension p) => Eq (InterfaceDecl p) where
+  InterfaceDecl _ ik1 ms1 i1 tps1 rts11 rts12 ib1 == InterfaceDecl _ ik2 ms2 i2 tps2 rts21 rts22 ib2 =
+    ik1 == ik2 && ms1 == ms2 && i1 == i2 && tps1 == tps2 && rts11 == rts21 && rts12 == rts22 && ib1 == ib2
 
 instance Located (InterfaceDecl p) where
   sourceSpan (InterfaceDecl s _ _ _ _ _ _ _) = s
 
 -- | Interface can declare either a normal interface or an annotation
 data InterfaceKind = InterfaceNormal | InterfaceAnnotation
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality InterfaceKind where
-  eq _ InterfaceNormal InterfaceNormal = True
-  eq _ InterfaceAnnotation InterfaceAnnotation = True
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | The body of an interface may declare members of the interface.
 newtype InterfaceBody p
   = InterfaceBody [MemberDecl p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (InterfaceBody p)
-
-deriving instance (ReadExtension p) => Read (InterfaceBody p)
-
-deriving instance (DataExtension p) => Data (InterfaceBody p)
-
-instance (EqualityExtension p) => Equality (InterfaceBody p) where
-  eq opt (InterfaceBody mds1) (InterfaceBody mds2) =
-    eq opt mds1 mds2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | A declaration is either a member declaration, or a declaration of an
 --   initializer, which may be static.
 data Decl p
   = MemberDecl (MemberDecl p)
   | InitDecl SourceSpan Bool (Block p)
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Decl p)
-
-deriving instance (ReadExtension p) => Read (Decl p)
-
-deriving instance (DataExtension p) => Data (Decl p)
-
-instance (EqualityExtension p) => Equality (Decl p) where
-  eq opt (MemberDecl md1) (MemberDecl md2) =
-    eq opt md1 md2
-  eq opt (InitDecl s1 b1 bl1) (InitDecl s2 b2 bl2) =
-    eq opt s1 s2 && b1 == b2 && eq opt bl1 bl2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (Decl p) where
+  MemberDecl md1 == MemberDecl md2 = md1 == md2
+  InitDecl _ b1 bl1 == InitDecl _ b2 bl2 = b1 == b2 && bl1 == bl2
+  _ == _ = False
 
 instance Located (Decl p) where
   sourceSpan (MemberDecl md) = sourceSpan md
@@ -347,26 +245,20 @@ data MemberDecl p
     MemberClassDecl (ClassDecl p)
   | -- | A member interface is an interface whose declaration is directly enclosed in another class or interface declaration.
     MemberInterfaceDecl (InterfaceDecl p)
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (MemberDecl p)
-
-deriving instance (ReadExtension p) => Read (MemberDecl p)
-
-deriving instance (DataExtension p) => Data (MemberDecl p)
-
-instance (EqualityExtension p) => Equality (MemberDecl p) where
-  eq opt (FieldDecl s1 ms1 t1 vds1) (FieldDecl s2 ms2 t2 vds2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt t1 t2 && eq opt vds1 vds2
-  eq opt (MethodDecl s1 ms1 tps1 mt1 i1 fps1 ets1 me1 mb1) (MethodDecl s2 ms2 tps2 mt2 i2 fps2 ets2 me2 mb2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt tps1 tps2 && eq opt mt1 mt2 && eq opt i1 i2 && eq opt fps1 fps2 && eq opt ets1 ets2 && eq opt me1 me2 && eq opt mb1 mb2
-  eq opt (ConstructorDecl s1 ms1 tps1 i1 fps1 ets1 cb1) (ConstructorDecl s2 ms2 tps2 i2 fps2 ets2 cb2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt tps1 tps2 && eq opt i1 i2 && eq opt fps1 fps2 && eq opt ets1 ets2 && eq opt cb1 cb2
-  eq opt (MemberClassDecl cd1) (MemberClassDecl cd2) =
-    eq opt cd1 cd2
-  eq opt (MemberInterfaceDecl id1) (MemberInterfaceDecl id2) =
-    eq opt id1 id2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (MemberDecl p) where
+  FieldDecl _ ms1 t1 vds1 == FieldDecl _ ms2 t2 vds2 =
+    ms1 == ms2 && t1 == t2 && vds1 == vds2
+  MethodDecl _ ms1 tps1 mt1 i1 fps1 ets1 me1 mb1 == MethodDecl _ ms2 tps2 mt2 i2 fps2 ets2 me2 mb2 =
+    ms1 == ms2 && tps1 == tps2 && mt1 == mt2 && i1 == i2 && fps1 == fps2 && ets1 == ets2 && me1 == me2 && mb1 == mb2
+  ConstructorDecl _ ms1 tps1 i1 fps1 ets1 cb1 == ConstructorDecl _ ms2 tps2 i2 fps2 ets2 cb2 =
+    ms1 == ms2 && tps1 == tps2 && i1 == i2 && fps1 == fps2 && ets1 == ets2 && cb1 == cb2
+  MemberClassDecl cd1 == MemberClassDecl cd2 =
+    cd1 == cd2
+  MemberInterfaceDecl id1 == MemberInterfaceDecl id2 =
+    id1 == id2
+  _ == _ = False
 
 instance Located (MemberDecl p) where
   sourceSpan (FieldDecl s _ _ _) = s
@@ -378,26 +270,20 @@ instance Located (MemberDecl p) where
 -- | A field declaration of a record
 data RecordFieldDecl
   = RecordFieldDecl Type Ident
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality RecordFieldDecl where
-  eq opt (RecordFieldDecl t1 i1) (RecordFieldDecl t2 i2) =
-    eq opt t1 t2 && eq opt i1 i2
+instance Eq RecordFieldDecl where
+  RecordFieldDecl t1 i1 == RecordFieldDecl t2 i2 =
+    t1 == t2 && i1 == i2
 
 -- | A declaration of a variable, which may be explicitly initialized.
 data VarDecl p
   = VarDecl SourceSpan VarDeclId (Maybe (VarInit p))
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (VarDecl p)
-
-deriving instance (ReadExtension p) => Read (VarDecl p)
-
-deriving instance (DataExtension p) => Data (VarDecl p)
-
-instance (EqualityExtension p) => Equality (VarDecl p) where
-  eq opt (VarDecl s1 vdi1 mvi1) (VarDecl s2 vdi2 mvi2) =
-    eq opt s1 s2 && eq opt vdi1 vdi2 && eq opt mvi1 mvi2
+instance (EqExtension p) => Eq (VarDecl p) where
+  VarDecl _ vdi1 mvi1 == VarDecl _ vdi2 mvi2 =
+    vdi1 == vdi2 && mvi1 == mvi2
 
 instance Located (VarDecl p) where
   sourceSpan (VarDecl s _ _) = s
@@ -407,14 +293,12 @@ data VarDeclId
   = VarId Ident
   | -- | Multi-dimensional arrays are represented by nested applications of 'VarDeclArray'.
     VarDeclArray SourceSpan VarDeclId
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality VarDeclId where
-  eq opt (VarId i1) (VarId i2) =
-    eq opt i1 i2
-  eq opt (VarDeclArray s1 vdi1) (VarDeclArray s2 vdi2) =
-    eq opt s1 s2 && eq opt vdi1 vdi2
-  eq _ _ _ = False
+instance Eq VarDeclId where
+  VarId i1 == VarId i2 = i1 == i2
+  VarDeclArray _ vdi1 == VarDeclArray _ vdi2 = vdi1 == vdi2
+  _ == _ = False
 
 instance Located VarDeclId where
   sourceSpan (VarId i) = sourceSpan i
@@ -424,20 +308,7 @@ instance Located VarDeclId where
 data VarInit p
   = InitExp (Exp p)
   | InitArray (ArrayInit p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (VarInit p)
-
-deriving instance (ReadExtension p) => Read (VarInit p)
-
-deriving instance (DataExtension p) => Data (VarInit p)
-
-instance (EqualityExtension p) => Equality (VarInit p) where
-  eq opt (InitExp e1) (InitExp e2) =
-    eq opt e1 e2
-  eq opt (InitArray ai1) (InitArray ai2) =
-    eq opt ai1 ai2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 instance (LocatedExtension p) => Located (VarInit p) where
   sourceSpan (InitExp e) = sourceSpan e
@@ -447,17 +318,11 @@ instance (LocatedExtension p) => Located (VarInit p) where
 --   for a given declaration may be marked as variable arity,
 --   indicated by the boolean argument.
 data FormalParam p = FormalParam SourceSpan [Modifier p] Type Bool VarDeclId
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (FormalParam p)
-
-deriving instance (ReadExtension p) => Read (FormalParam p)
-
-deriving instance (DataExtension p) => Data (FormalParam p)
-
-instance (EqualityExtension p) => Equality (FormalParam p) where
-  eq opt (FormalParam s1 ms1 t1 b1 vdi1) (FormalParam s2 ms2 t2 b2 vdi2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt t1 t2 && b1 == b2 && eq opt vdi1 vdi2
+instance (EqExtension p) => Eq (FormalParam p) where
+  FormalParam _ ms1 t1 b1 vdi1 == FormalParam _ ms2 t2 b2 vdi2 =
+    ms1 == ms2 && t1 == t2 && b1 == b2 && vdi1 == vdi2
 
 instance Located (FormalParam p) where
   sourceSpan (FormalParam s _ _ _ _) = s
@@ -465,17 +330,11 @@ instance Located (FormalParam p) where
 -- | A formal parameter in catch clauses. Unlike formal parameters in
 --   method declarations, multiple types can be specified.
 data CatchFormalParam p = CatchFormalParam SourceSpan (NonEmpty ([Modifier p], Type)) VarDeclId
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (CatchFormalParam p)
-
-deriving instance (ReadExtension p) => Read (CatchFormalParam p)
-
-deriving instance (DataExtension p) => Data (CatchFormalParam p)
-
-instance (EqualityExtension p) => Equality (CatchFormalParam p) where
-  eq opt (CatchFormalParam s1 t1 vdi1) (CatchFormalParam s2 t2 vdi2) =
-    eq opt s1 s2 && eq opt t1 t2 && eq opt vdi1 vdi2
+instance (EqExtension p) => Eq (CatchFormalParam p) where
+  CatchFormalParam _ t1 vdi1 == CatchFormalParam _ t2 vdi2 =
+    t1 == t2 && vdi1 == vdi2
 
 instance Located (CatchFormalParam p) where
   sourceSpan (CatchFormalParam s _ _) = s
@@ -483,32 +342,12 @@ instance Located (CatchFormalParam p) where
 -- | A method body is either a block of code that implements the method or simply a
 --   semicolon, indicating the lack of an implementation (modelled by 'Nothing').
 newtype MethodBody p = MethodBody (Maybe (Block p))
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (MethodBody p)
-
-deriving instance (ReadExtension p) => Read (MethodBody p)
-
-deriving instance (DataExtension p) => Data (MethodBody p)
-
-instance (EqualityExtension p) => Equality (MethodBody p) where
-  eq opt (MethodBody mb1) (MethodBody mb2) =
-    eq opt mb1 mb2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | The first statement of a constructor body may be an explicit invocation of
 --   another constructor of the same class or of the direct superclass.
 data ConstructorBody p = ConstructorBody (Maybe (ExplConstrInv p)) [BlockStmt p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (ConstructorBody p)
-
-deriving instance (ReadExtension p) => Read (ConstructorBody p)
-
-deriving instance (DataExtension p) => Data (ConstructorBody p)
-
-instance (EqualityExtension p) => Equality (ConstructorBody p) where
-  eq opt (ConstructorBody meci1 bss1) (ConstructorBody meci2 bss2) =
-    eq opt meci1 meci2 && eq opt bss1 bss2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | An explicit constructor invocation invokes another constructor of the
 --   same class, or a constructor of the direct superclass, which may
@@ -518,22 +357,7 @@ data ExplConstrInv p
   = ThisInvoke [RefType] [Argument p]
   | SuperInvoke [RefType] [Argument p]
   | PrimarySuperInvoke (Exp p) [RefType] [Argument p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (ExplConstrInv p)
-
-deriving instance (ReadExtension p) => Read (ExplConstrInv p)
-
-deriving instance (DataExtension p) => Data (ExplConstrInv p)
-
-instance (EqualityExtension p) => Equality (ExplConstrInv p) where
-  eq opt (ThisInvoke rts1 as1) (ThisInvoke rts2 as2) =
-    eq opt rts1 rts2 && eq opt as1 as2
-  eq opt (SuperInvoke rts1 as1) (SuperInvoke rts2 as2) =
-    eq opt rts1 rts2 && eq opt as1 as2
-  eq opt (PrimarySuperInvoke e1 rts1 as1) (PrimarySuperInvoke e2 rts2 as2) =
-    eq opt e1 e2 && eq opt rts1 rts2 && eq opt as1 as2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | A modifier specifying properties of a given declaration. In general only
 --   a few of these modifiers are allowed for each declaration type, for instance
@@ -552,42 +376,23 @@ data Modifier p
   | Annotation (Annotation p)
   | Synchronized_ SourceSpan
   | Sealed SourceSpan
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Modifier p)
-
-deriving instance (ReadExtension p) => Read (Modifier p)
-
-deriving instance (DataExtension p) => Data (Modifier p)
-
-instance (EqualityExtension p) => Equality (Modifier p) where
-  eq opt (Public s1) (Public s2) =
-    eq opt s1 s2
-  eq opt (Private s1) (Private s2) =
-    eq opt s1 s2
-  eq opt (Protected s1) (Protected s2) =
-    eq opt s1 s2
-  eq opt (Abstract s1) (Abstract s2) =
-    eq opt s1 s2
-  eq opt (Final s1) (Final s2) =
-    eq opt s1 s2
-  eq opt (Static s1) (Static s2) =
-    eq opt s1 s2
-  eq opt (StrictFP s1) (StrictFP s2) =
-    eq opt s1 s2
-  eq opt (Transient s1) (Transient s2) =
-    eq opt s1 s2
-  eq opt (Volatile s1) (Volatile s2) =
-    eq opt s1 s2
-  eq opt (Native s1) (Native s2) =
-    eq opt s1 s2
-  eq opt (Annotation a1) (Annotation a2) =
-    eq opt a1 a2
-  eq opt (Synchronized_ s1) (Synchronized_ s2) =
-    eq opt s1 s2
-  eq opt (Sealed s1) (Sealed s2) =
-    eq opt s1 s2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (Modifier p) where
+  Public _ == Public _ = True
+  Private _ == Private _ = True
+  Protected _ == Protected _ = True
+  Abstract _ == Abstract _ = True
+  Final _ == Final _ = True
+  Static _ == Static _ = True
+  StrictFP _ == StrictFP _ = True
+  Transient _ == Transient _ = True
+  Volatile _ == Volatile _ = True
+  Native _ == Native _ = True
+  Annotation a1 == Annotation a2 = a1 == a2
+  Synchronized_ _ == Synchronized_ _ = True
+  Sealed _ == Sealed _ = True
+  _ == _ = False
 
 instance Located (Modifier p) where
   sourceSpan (Public s) = s
@@ -620,22 +425,16 @@ data Annotation p
       { span :: SourceSpan,
         annName :: Name
       }
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Annotation p)
-
-deriving instance (ReadExtension p) => Read (Annotation p)
-
-deriving instance (DataExtension p) => Data (Annotation p)
-
-instance (EqualityExtension p) => Equality (Annotation p) where
-  eq opt (NormalAnnotation s1 n1 ievs1) (NormalAnnotation s2 n2 ievs2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt ievs1 ievs2
-  eq opt (SingleElementAnnotation s1 n1 ev1) (SingleElementAnnotation s2 n2 ev2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt ev1 ev2
-  eq opt (MarkerAnnotation s1 n1) (MarkerAnnotation s2 n2) =
-    eq opt s1 s2 && eq opt n1 n2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (Annotation p) where
+  NormalAnnotation _ n1 ievs1 == NormalAnnotation _ n2 ievs2 =
+    n1 == n2 && ievs1 == ievs2
+  SingleElementAnnotation _ n1 ev1 == SingleElementAnnotation _ n2 ev2 =
+    n1 == n2 && ev1 == ev2
+  MarkerAnnotation _ n1 == MarkerAnnotation _ n2 =
+    n1 == n2
+  _ == _ = False
 
 instance Located (Annotation p) where
   sourceSpan (NormalAnnotation s _ _) = s
@@ -646,20 +445,7 @@ instance Located (Annotation p) where
 data ElementValue p
   = EVVal (VarInit p)
   | EVAnn (Annotation p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (ElementValue p)
-
-deriving instance (ReadExtension p) => Read (ElementValue p)
-
-deriving instance (DataExtension p) => Data (ElementValue p)
-
-instance (EqualityExtension p) => Equality (ElementValue p) where
-  eq opt (EVVal vi1) (EVVal vi2) =
-    eq opt vi1 vi2
-  eq opt (EVAnn a1) (EVAnn a2) =
-    eq opt a1 a2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 instance (LocatedExtension p) => Located (ElementValue p) where
   sourceSpan (EVVal vi) = sourceSpan vi
@@ -671,17 +457,10 @@ instance (LocatedExtension p) => Located (ElementValue p) where
 -- | A block is a sequence of statements, local class declarations
 --   and local variable declaration statements within braces.
 data Block p = Block SourceSpan [BlockStmt p]
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Block p)
-
-deriving instance (ReadExtension p) => Read (Block p)
-
-deriving instance (DataExtension p) => Data (Block p)
-
-instance (EqualityExtension p) => Equality (Block p) where
-  eq opt (Block s1 bss1) (Block s2 bss2) =
-    eq opt s1 s2 && eq opt bss1 bss2
+instance (EqExtension p) => Eq (Block p) where
+  Block _ bss1 == Block _ bss2 = bss1 == bss2
 
 instance Located (Block p) where
   sourceSpan (Block s _) = s
@@ -692,22 +471,16 @@ data BlockStmt p
   = BlockStmt (Stmt p)
   | LocalClass (ClassDecl p)
   | LocalVars SourceSpan [Modifier p] Type (NonEmpty (VarDecl p))
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (BlockStmt p)
-
-deriving instance (ReadExtension p) => Read (BlockStmt p)
-
-deriving instance (DataExtension p) => Data (BlockStmt p)
-
-instance (EqualityExtension p) => Equality (BlockStmt p) where
-  eq opt (BlockStmt stmt1) (BlockStmt stmt2) =
-    eq opt stmt1 stmt2
-  eq opt (LocalClass cd1) (LocalClass cd2) =
-    eq opt cd1 cd2
-  eq opt (LocalVars s1 ms1 t1 vds1) (LocalVars s2 ms2 t2 vds2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt t1 t2 && eq opt vds1 vds2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (BlockStmt p) where
+  BlockStmt stmt1 == BlockStmt stmt2 =
+    stmt1 == stmt2
+  LocalClass cd1 == LocalClass cd2 =
+    cd1 == cd2
+  LocalVars _ ms1 t1 vds1 == LocalVars _ ms2 t2 vds2 =
+    ms1 == ms2 && t1 == t2 && vds1 == vds2
+  _ == _ = False
 
 instance Located (BlockStmt p) where
   sourceSpan (BlockStmt s) = sourceSpan s
@@ -761,52 +534,34 @@ data Stmt p
     Try SourceSpan [TryResource p] (Block p) [Catch p] (Maybe {- finally -} (Block p))
   | -- | Statements may have label prefixes.
     Labeled SourceSpan Ident (Stmt p)
-  deriving (Generic, Typeable)
+  deriving (Generic, Typeable, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Stmt p)
-
-deriving instance (ReadExtension p) => Read (Stmt p)
-
-deriving instance (DataExtension p) => Data (Stmt p)
-
-instance (EqualityExtension p) => Equality (Stmt p) where
-  eq opt (StmtBlock b1) (StmtBlock b2) =
-    eq opt b1 b2
-  eq opt (IfThen s1 e1 stmt1) (IfThen s2 e2 stmt2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt stmt1 stmt2
-  eq opt (IfThenElse s1 e1 stmt11 stmt12) (IfThenElse s2 e2 stmt21 stmt22) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt stmt11 stmt21 && eq opt stmt12 stmt22
-  eq opt (While s1 e1 stmt1) (While s2 e2 stmt2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt stmt1 stmt2
-  eq opt (BasicFor s1 mfi1 me1 mes1 stmt1) (BasicFor s2 mfi2 me2 mes2 stmt2) =
-    eq opt s1 s2 && eq opt mfi1 mfi2 && eq opt me1 me2 && eq opt mes1 mes2 && eq opt stmt1 stmt2
-  eq opt (EnhancedFor s1 ms1 t1 i1 e1 stmt1) (EnhancedFor s2 ms2 t2 i2 e2 stmt2) =
-    eq opt s1 s2 && eq opt ms1 ms2 && eq opt t1 t2 && eq opt i1 i2 && eq opt e1 e2 && eq opt stmt1 stmt2
-  eq opt (Empty s1) (Empty s2) =
-    eq opt s1 s2
-  eq opt (ExpStmt s1 e1) (ExpStmt s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (Assert s1 e1 me1) (Assert s2 e2 me2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt me1 me2
-  eq opt (Switch s1 ss1 e1 sbs1) (Switch s2 ss2 e2 sbs2) =
-    eq opt s1 s2 && eq opt ss1 ss2 && eq opt e1 e2 && eq opt sbs1 sbs2
-  eq opt (Do s1 stmt1 e1) (Do s2 stmt2 e2) =
-    eq opt s1 s2 && eq opt stmt1 stmt2 && eq opt e1 e2
-  eq opt (Break s1 mi1) (Break s2 mi2) =
-    eq opt s1 s2 && eq opt mi1 mi2
-  eq opt (Continue s1 mi1) (Continue s2 mi2) =
-    eq opt s1 s2 && eq opt mi1 mi2
-  eq opt (Return s1 me1) (Return s2 me2) =
-    eq opt s1 s2 && eq opt me1 me2
-  eq opt (Synchronized s1 e1 b1) (Synchronized s2 e2 b2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt b1 b2
-  eq opt (Throw s1 e1) (Throw s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (Try s1 trs1 b1 cs1 mb1) (Try s2 trs2 b2 cs2 mb2) =
-    eq opt s1 s2 && eq opt trs1 trs2 && eq opt b1 b2 && eq opt cs1 cs2 && eq opt mb1 mb2
-  eq opt (Labeled s1 i1 stmt1) (Labeled s2 i2 stmt2) =
-    eq opt s1 s2 && eq opt i1 i2 && eq opt stmt1 stmt2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (Stmt p) where
+  StmtBlock b1 == StmtBlock b2 = b1 == b2
+  IfThen _ e1 stmt1 == IfThen _ e2 stmt2 = e1 == e2 && stmt1 == stmt2
+  IfThenElse _ e1 stmt11 stmt12 == IfThenElse _ e2 stmt21 stmt22 =
+    e1 == e2 && stmt11 == stmt21 && stmt12 == stmt22
+  While _ e1 stmt1 == While _ e2 stmt2 =
+    e1 == e2 && stmt1 == stmt2
+  BasicFor _ mfi1 me1 mes1 stmt1 == BasicFor _ mfi2 me2 mes2 stmt2 =
+    mfi1 == mfi2 && me1 == me2 && mes1 == mes2 && stmt1 == stmt2
+  EnhancedFor _ ms1 t1 i1 e1 stmt1 == EnhancedFor _ ms2 t2 i2 e2 stmt2 =
+    ms1 == ms2 && t1 == t2 && i1 == i2 && e1 == e2 && stmt1 == stmt2
+  Empty _ == Empty _ = True
+  ExpStmt _ e1 == ExpStmt _ e2 = e1 == e2
+  Assert _ e1 me1 == Assert _ e2 me2 = e1 == e2 && me1 == me2
+  Switch _ ss1 e1 sbs1 == Switch _ ss2 e2 sbs2 =
+    ss1 == ss2 && e1 == e2 && sbs1 == sbs2
+  Do _ stmt1 e1 == Do _ stmt2 e2 = stmt1 == stmt2 && e1 == e2
+  Break _ mi1 == Break _ mi2 = mi1 == mi2
+  Continue _ mi1 == Continue _ mi2 = mi1 == mi2
+  Return _ me1 == Return _ me2 = me1 == me2
+  Synchronized _ e1 b1 == Synchronized _ e2 b2 = e1 == e2 && b1 == b2
+  Throw _ e1 == Throw _ e2 = e1 == e2
+  Try _ trs1 b1 cs1 mb1 == Try _ trs2 b2 cs2 mb2 =
+    trs1 == trs2 && b1 == b2 && cs1 == cs2 && mb1 == mb2
+  Labeled _ i1 stmt1 == Labeled _ i2 stmt2 = i1 == i2 && stmt1 == stmt2
+  _ == _ = False
 
 instance Located (Stmt p) where
   sourceSpan (StmtBlock b) = sourceSpan b
@@ -831,67 +586,26 @@ instance Located (Stmt p) where
 -- | If a value is thrown and the try statement has one or more catch clauses that can catch it, then control will be
 --   transferred to the first such catch clause.
 data Catch p = Catch (CatchFormalParam p) (Block p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (Catch p)
-
-deriving instance (ReadExtension p) => Read (Catch p)
-
-deriving instance (DataExtension p) => Data (Catch p)
-
-instance (EqualityExtension p) => Equality (Catch p) where
-  eq opt (Catch fp1 b1) (Catch fp2 b2) =
-    eq opt fp1 fp2 && eq opt b1 b2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 data TryResource p
   = TryResourceVarDecl (ResourceDecl p)
   | TryResourceVarAccess Ident
   | TryResourceQualAccess (FieldAccess p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (TryResource p)
-
-deriving instance (ReadExtension p) => Read (TryResource p)
-
-deriving instance (DataExtension p) => Data (TryResource p)
-
-instance (EqualityExtension p) => Equality (TryResource p) where
-  eq opt (TryResourceVarDecl rd1) (TryResourceVarDecl rd2) =
-    eq opt rd1 rd2
-  eq opt (TryResourceVarAccess i1) (TryResourceVarAccess i2) =
-    eq opt i1 i2
-  eq opt (TryResourceQualAccess fa1) (TryResourceQualAccess fa2) =
-    eq opt fa1 fa2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 data ResourceDecl p
   = ResourceDecl [Modifier p] Type VarDeclId (VarInit p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (ResourceDecl p)
-
-deriving instance (ReadExtension p) => Read (ResourceDecl p)
-
-deriving instance (DataExtension p) => Data (ResourceDecl p)
-
-instance (EqualityExtension p) => Equality (ResourceDecl p) where
-  eq opt (ResourceDecl ms1 t1 vdi1 vi1) (ResourceDecl ms2 t2 vdi2 vi2) =
-    eq opt ms1 ms2 && eq opt t1 t2 && eq opt vdi1 vdi2 && eq opt vi1 vi2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | A block of code labelled with a @case@ or @default@ within a @switch@ statement.
 data SwitchBlock p
   = SwitchBlock SourceSpan (SwitchLabel p) [BlockStmt p]
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (SwitchBlock p)
-
-deriving instance (ReadExtension p) => Read (SwitchBlock p)
-
-deriving instance (DataExtension p) => Data (SwitchBlock p)
-
-instance (EqualityExtension p) => Equality (SwitchBlock p) where
-  eq opt (SwitchBlock s1 sl1 bss1) (SwitchBlock s2 sl2 bss2) =
-    eq opt s1 s2 && eq opt sl1 sl2 && eq opt bss1 bss2
+instance (EqExtension p) => Eq (SwitchBlock p) where
+  SwitchBlock _ sl1 bss1 == SwitchBlock _ sl2 bss2 =
+    sl1 == sl2 && bss1 == bss2
 
 instance Located (SwitchBlock p) where
   sourceSpan (SwitchBlock s _ _) = s
@@ -899,12 +613,7 @@ instance Located (SwitchBlock p) where
 data SwitchStyle
   = SwitchOldStyle
   | SwitchNewStyle -- JEP 361
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality SwitchStyle where
-  eq _ SwitchOldStyle SwitchOldStyle = True
-  eq _ SwitchNewStyle SwitchNewStyle = True
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | A label within a @switch@ statement.
 data SwitchLabel p
@@ -912,70 +621,22 @@ data SwitchLabel p
     -- The list must be non-empty.
     SwitchCase (NonEmpty (Exp p))
   | Default
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (SwitchLabel p)
-
-deriving instance (ReadExtension p) => Read (SwitchLabel p)
-
-deriving instance (DataExtension p) => Data (SwitchLabel p)
-
-instance (EqualityExtension p) => Equality (SwitchLabel p) where
-  eq opt (SwitchCase es1) (SwitchCase es2) =
-    eq opt es1 es2
-  eq _ Default Default = True
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 data SwitchExpBranch p
   = SwitchExpBranch (SwitchLabel p) (SwitchExpBranchBody p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (SwitchExpBranch p)
-
-deriving instance (ReadExtension p) => Read (SwitchExpBranch p)
-
-deriving instance (DataExtension p) => Data (SwitchExpBranch p)
-
-instance (EqualityExtension p) => Equality (SwitchExpBranch p) where
-  eq opt (SwitchExpBranch sl1 sebb1) (SwitchExpBranch sl2 sebb2) =
-    eq opt sl1 sl2 && eq opt sebb1 sebb2
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 data SwitchExpBranchBody p
   = SwitchExpBranchExp (Exp p)
   | SwitchExpBranchBlock [BlockStmt p]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (SwitchExpBranchBody p)
-
-deriving instance (ReadExtension p) => Read (SwitchExpBranchBody p)
-
-deriving instance (DataExtension p) => Data (SwitchExpBranchBody p)
-
-instance (EqualityExtension p) => Equality (SwitchExpBranchBody p) where
-  eq opt (SwitchExpBranchExp e1) (SwitchExpBranchExp e2) =
-    eq opt e1 e2
-  eq opt (SwitchExpBranchBlock bss1) (SwitchExpBranchBlock bss2) =
-    eq opt bss1 bss2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | Initialization code for a basic @for@ statement.
 data ForInit p
   = ForLocalVars [Modifier p] Type (NonEmpty (VarDecl p))
   | ForInitExps (NonEmpty (Exp p))
-  deriving (Generic, Typeable)
-
-deriving instance (ShowExtension p) => Show (ForInit p)
-
-deriving instance (ReadExtension p) => Read (ForInit p)
-
-deriving instance (DataExtension p) => Data (ForInit p)
-
-instance (EqualityExtension p) => Equality (ForInit p) where
-  eq opt (ForLocalVars ms1 t1 vds1) (ForLocalVars ms2 t2 vds2) =
-    eq opt ms1 ms2 && eq opt t1 t2 && eq opt vds1 vds2
-  eq opt (ForInitExps es1) (ForInitExps es2) =
-    eq opt es1 es2
-  eq _ _ _ = False
+  deriving (Generic, Typeable, Show, Data, Eq)
 
 -- | An exception type has to be a class type or a type variable.
 type ExceptionType = RefType -- restricted to ClassType or TypeVariable
@@ -1055,72 +716,49 @@ data Exp p
     MethodRef SourceSpan Name MethodRefTarget
   | -- | New-style switch expression (JEP 361)
     SwitchExp SourceSpan (Exp p) (NonEmpty (SwitchExpBranch p))
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (Exp p)
-
-deriving instance (ReadExtension p) => Read (Exp p)
-
-deriving instance (DataExtension p) => Data (Exp p)
-
-instance (EqualityExtension p) => Equality (Exp p) where
-  eq opt (Lit l1) (Lit l2) =
-    eq opt l1 l2
-  eq opt (ClassLit s1 mt1) (ClassLit s2 mt2) =
-    eq opt s1 s2 && eq opt mt1 mt2
-  eq opt (This s1) (This s2) =
-    eq opt s1 s2
-  eq opt (ThisClass s1 n1) (ThisClass s2 n2) =
-    eq opt s1 s2 && eq opt n1 n2
-  eq opt (InstanceCreation s1 tas1 tds1 as1 mcb1) (InstanceCreation s2 tas2 tds2 as2 mcb2) =
-    eq opt s1 s2 && eq opt tas1 tas2 && eq opt tds1 tds2 && eq opt as1 as2 && eq opt mcb1 mcb2
-  eq opt (QualInstanceCreation s1 e1 tas1 i1 as1 mcb1) (QualInstanceCreation s2 e2 tas2 i2 as2 mcb2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt tas1 tas2 && eq opt i1 i2 && eq opt as1 as2 && eq opt mcb1 mcb2
-  eq opt (ArrayCreate s1 t1 es1 int1) (ArrayCreate s2 t2 es2 int2) =
-    eq opt s1 s2 && eq opt t1 t2 && eq opt es1 es2 && int1 == int2
-  eq opt (ArrayCreateInit s1 t1 int1 ai1) (ArrayCreateInit s2 t2 int2 ai2) =
-    eq opt s1 s2 && eq opt t1 t2 && eq opt ai1 ai2 && int1 == int2
-  eq opt (FieldAccess fa1) (FieldAccess fa2) =
-    eq opt fa1 fa2
-  eq opt (MethodInv mi1) (MethodInv mi2) =
-    eq opt mi1 mi2
-  eq opt (ArrayAccess ai1) (ArrayAccess ai2) =
-    eq opt ai1 ai2
-  eq opt (ExpName n1) (ExpName n2) =
-    eq opt n1 n2
-  eq opt (PostIncrement s1 e1) (PostIncrement s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PostDecrement s1 e1) (PostDecrement s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PreIncrement s1 e1) (PreIncrement s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PreDecrement s1 e1) (PreDecrement s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PrePlus s1 e1) (PrePlus s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PreMinus s1 e1) (PreMinus s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PreBitCompl s1 e1) (PreBitCompl s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (PreNot s1 e1) (PreNot s2 e2) =
-    eq opt s1 s2 && eq opt e1 e2
-  eq opt (Cast s1 t1 e1) (Cast s2 t2 e2) =
-    eq opt s1 s2 && eq opt t1 t2 && eq opt e1 e2
-  eq opt (BinOp s1 e11 o1 e12) (BinOp s2 e21 o2 e22) =
-    eq opt s1 s2 && eq opt e11 e21 && eq opt o1 o2 && eq opt e12 e22
-  eq opt (InstanceOf s1 e1 rt1 mn1) (InstanceOf s2 e2 rt2 mn2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt rt1 rt2 && eq opt mn1 mn2
-  eq opt (Cond s1 e11 e12 e13) (Cond s2 e21 e22 e23) =
-    eq opt s1 s2 && eq opt e11 e21 && eq opt e12 e22 && eq opt e13 e23
-  eq opt (Assign s1 lhs1 ao1 e1) (Assign s2 lhs2 ao2 e2) =
-    eq opt s1 s2 && eq opt lhs1 lhs2 && eq opt ao1 ao2 && eq opt e1 e2
-  eq opt (Lambda s1 lp1 le1) (Lambda s2 lp2 le2) =
-    eq opt s1 s2 && eq opt lp1 lp2 && eq opt le1 le2
-  eq opt (MethodRef s1 n1 mrt1) (MethodRef s2 n2 mrt2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt mrt1 mrt2
-  eq opt (SwitchExp s1 e1 sebs1) (SwitchExp s2 e2 sebs2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt sebs1 sebs2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (Exp p) where
+  Lit l1 == Lit l2 = l1 == l2
+  ClassLit _ mt1 == ClassLit _ mt2 = mt1 == mt2
+  This _ == This _ = True
+  ThisClass _ n1 == ThisClass _ n2 = n1 == n2
+  InstanceCreation _ tas1 tds1 as1 mcb1 == InstanceCreation _ tas2 tds2 as2 mcb2 =
+    tas1 == tas2 && tds1 == tds2 && as1 == as2 && mcb1 == mcb2
+  QualInstanceCreation _ e1 tas1 i1 as1 mcb1 == QualInstanceCreation _ e2 tas2 i2 as2 mcb2 =
+    e1 == e2 && tas1 == tas2 && i1 == i2 && as1 == as2 && mcb1 == mcb2
+  ArrayCreate _ t1 es1 int1 == ArrayCreate _ t2 es2 int2 =
+    t1 == t2 && es1 == es2 && int1 == int2
+  ArrayCreateInit _ t1 int1 ai1 == ArrayCreateInit _ t2 int2 ai2 =
+    t1 == t2 && ai1 == ai2 && int1 == int2
+  FieldAccess fa1 == FieldAccess fa2 = fa1 == fa2
+  MethodInv mi1 == MethodInv mi2 = mi1 == mi2
+  ArrayAccess ai1 == ArrayAccess ai2 = ai1 == ai2
+  ExpName n1 == ExpName n2 = n1 == n2
+  PostIncrement _ e1 == PostIncrement _ e2 = e1 == e2
+  PostDecrement _ e1 == PostDecrement _ e2 = e1 == e2
+  PreIncrement _ e1 == PreIncrement _ e2 = e1 == e2
+  PreDecrement _ e1 == PreDecrement _ e2 = e1 == e2
+  PrePlus _ e1 == PrePlus _ e2 = e1 == e2
+  PreMinus _ e1 == PreMinus _ e2 = e1 == e2
+  PreBitCompl _ e1 == PreBitCompl _ e2 = e1 == e2
+  PreNot _ e1 == PreNot _ e2 = e1 == e2
+  Cast _ t1 e1 == Cast _ t2 e2 = t1 == t2 && e1 == e2
+  BinOp _ e11 o1 e12 == BinOp _ e21 o2 e22 =
+    e11 == e21 && o1 == o2 && e12 == e22
+  InstanceOf _ e1 rt1 mn1 == InstanceOf _ e2 rt2 mn2 =
+    e1 == e2 && rt1 == rt2 && mn1 == mn2
+  Cond _ e11 e12 e13 == Cond _ e21 e22 e23 =
+    e11 == e21 && e12 == e22 && e13 == e23
+  Assign _ lhs1 ao1 e1 == Assign _ lhs2 ao2 e2 =
+    lhs1 == lhs2 && ao1 == ao2 && e1 == e2
+  Lambda _ lp1 le1 == Lambda _ lp2 le2 =
+    lp1 == lp2 && le1 == le2
+  MethodRef _ n1 mrt1 == MethodRef _ n2 mrt2 =
+    n1 == n2 && mrt1 == mrt2
+  SwitchExp _ e1 sebs1 == SwitchExp _ e2 sebs2 =
+    e1 == e2 && sebs1 == sebs2
+  _ == _ = False
 
 instance (LocatedExtension p) => Located (Exp p) where
   sourceSpan (Lit l) = sourceSpan l
@@ -1162,38 +800,16 @@ data Lhs p
     FieldLhs (FieldAccess p)
   | -- | Assign to an array
     ArrayLhs (ArrayIndex p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (Lhs p)
-
-deriving instance (ReadExtension p) => Read (Lhs p)
-
-deriving instance (DataExtension p) => Data (Lhs p)
-
-instance (EqualityExtension p) => Equality (Lhs p) where
-  eq opt (NameLhs n1) (NameLhs n2) =
-    eq opt n1 n2
-  eq opt (FieldLhs fa1) (FieldLhs fa2) =
-    eq opt fa1 fa2
-  eq opt (ArrayLhs ai1) (ArrayLhs ai2) =
-    eq opt ai1 ai2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | Array access
 data ArrayIndex p
   = -- | Index into an array
     ArrayIndex SourceSpan (Exp p) (NonEmpty (Exp p))
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (ArrayIndex p)
-
-deriving instance (ReadExtension p) => Read (ArrayIndex p)
-
-deriving instance (DataExtension p) => Data (ArrayIndex p)
-
-instance (EqualityExtension p) => Equality (ArrayIndex p) where
-  eq opt (ArrayIndex s1 e1 es1) (ArrayIndex s2 e2 es2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt es1 es2
+instance (EqExtension p) => Eq (ArrayIndex p) where
+  ArrayIndex _ e1 es1 == ArrayIndex _ e2 es2 = e1 == e2 && es1 == es2
 
 instance Located (ArrayIndex p) where
   sourceSpan (ArrayIndex s _ _) = s
@@ -1207,22 +823,16 @@ data FieldAccess p
     SuperFieldAccess SourceSpan Ident
   | -- | Accessing a (static) field of a named class.
     ClassFieldAccess SourceSpan Name Ident
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (FieldAccess p)
-
-deriving instance (ReadExtension p) => Read (FieldAccess p)
-
-deriving instance (DataExtension p) => Data (FieldAccess p)
-
-instance (EqualityExtension p) => Equality (FieldAccess p) where
-  eq opt (PrimaryFieldAccess s1 e1 i1) (PrimaryFieldAccess s2 e2 i2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt i1 i2
-  eq opt (SuperFieldAccess s1 i1) (SuperFieldAccess s2 i2) =
-    eq opt s1 s2 && eq opt i1 i2
-  eq opt (ClassFieldAccess s1 n1 i1) (ClassFieldAccess s2 n2 i2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt i1 i2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (FieldAccess p) where
+  PrimaryFieldAccess _ e1 i1 == PrimaryFieldAccess _ e2 i2 =
+    e1 == e2 && i1 == i2
+  SuperFieldAccess _ i1 == SuperFieldAccess _ i2 =
+    i1 == i2
+  ClassFieldAccess _ n1 i1 == ClassFieldAccess _ n2 i2 =
+    n1 == n2 && i1 == i2
+  _ == _ = False
 
 instance Located (FieldAccess p) where
   sourceSpan (PrimaryFieldAccess s _ _) = s
@@ -1234,45 +844,17 @@ data LambdaParams p
   = LambdaSingleParam Ident
   | LambdaFormalParams [FormalParam p]
   | LambdaInferredParams [Ident]
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (LambdaParams p)
-
-deriving instance (ReadExtension p) => Read (LambdaParams p)
-
-deriving instance (DataExtension p) => Data (LambdaParams p)
-
-instance (EqualityExtension p) => Equality (LambdaParams p) where
-  eq opt (LambdaSingleParam i1) (LambdaSingleParam i2) =
-    eq opt i1 i2
-  eq opt (LambdaFormalParams fps1) (LambdaFormalParams fps2) =
-    eq opt fps1 fps2
-  eq opt (LambdaInferredParams is1) (LambdaInferredParams is2) =
-    eq opt is1 is2
-  eq _ _ _ = False
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | Lambda expression, starting from java 8
 data LambdaExpression p
   = LambdaExpression (Exp p)
   | LambdaBlock (Block p)
-  deriving (Typeable, Generic)
-
-deriving instance (ShowExtension p) => Show (LambdaExpression p)
-
-deriving instance (ReadExtension p) => Read (LambdaExpression p)
-
-deriving instance (DataExtension p) => Data (LambdaExpression p)
+  deriving (Typeable, Generic, Show, Data, Eq)
 
 type family XNameClassification x where
   XNameClassification Analyzed = ClassifiedName
   XNameClassification Parsed = Name
-
-instance (EqualityExtension p) => Equality (LambdaExpression p) where
-  eq opt (LambdaExpression e1) (LambdaExpression e2) =
-    eq opt e1 e2
-  eq opt (LambdaBlock b1) (LambdaBlock b2) =
-    eq opt b1 b2
-  eq _ _ _ = False
 
 -- | A method invocation expression is used to invoke a class or instance method.
 data MethodInvocation p
@@ -1290,22 +872,20 @@ data MethodInvocation p
 
 deriving instance (ShowExtension p) => Show (MethodInvocation p)
 
-deriving instance (ReadExtension p) => Read (MethodInvocation p)
-
 deriving instance (DataExtension p) => Data (MethodInvocation p)
 
-instance (EqualityExtension p) => Equality (MethodInvocation p) where
-  eq opt (MethodCall s1 mn1 rts1 i1 as1) (MethodCall s2 mn2 rts2 i2 as2) =
-    eq opt s1 s2 && eq opt mn1 mn2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
-  eq opt (PrimaryMethodCall s1 e1 rts1 i1 as1) (PrimaryMethodCall s2 e2 rts2 i2 as2) =
-    eq opt s1 s2 && eq opt e1 e2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
-  eq opt (SuperMethodCall s1 rts1 i1 as1) (SuperMethodCall s2 rts2 i2 as2) =
-    eq opt s1 s2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
-  eq opt (ClassMethodCall s1 n1 rts1 i1 as1) (ClassMethodCall s2 n2 rts2 i2 as2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
-  eq opt (TypeMethodCall s1 n1 rts1 i1 as1) (TypeMethodCall s2 n2 rts2 i2 as2) =
-    eq opt s1 s2 && eq opt n1 n2 && eq opt rts1 rts2 && eq opt i1 i2 && eq opt as1 as2
-  eq _ _ _ = False
+instance (EqExtension p) => Eq (MethodInvocation p) where
+  MethodCall _ mn1 rts1 i1 as1 == MethodCall _ mn2 rts2 i2 as2 =
+    mn1 == mn2 && rts1 == rts2 && i1 == i2 && as1 == as2
+  PrimaryMethodCall _ e1 rts1 i1 as1 == PrimaryMethodCall _ e2 rts2 i2 as2 =
+    e1 == e2 && rts1 == rts2 && i1 == i2 && as1 == as2
+  SuperMethodCall _ rts1 i1 as1 == SuperMethodCall _ rts2 i2 as2 =
+    rts1 == rts2 && i1 == i2 && as1 == as2
+  ClassMethodCall _ n1 rts1 i1 as1 == ClassMethodCall _ n2 rts2 i2 as2 =
+    n1 == n2 && rts1 == rts2 && i1 == i2 && as1 == as2
+  TypeMethodCall _ n1 rts1 i1 as1 == TypeMethodCall _ n2 rts2 i2 as2 =
+    n1 == n2 && rts1 == rts2 && i1 == i2 && as1 == as2
+  _ == _ = False
 
 instance Located (MethodInvocation p) where
   sourceSpan (MethodCall s _ _ _ _) = s
@@ -1318,17 +898,10 @@ instance Located (MethodInvocation p) where
 --   array and providing some initial values
 data ArrayInit p
   = ArrayInit SourceSpan [VarInit p]
-  deriving (Typeable, Generic)
+  deriving (Typeable, Generic, Show, Data)
 
-deriving instance (ShowExtension p) => Show (ArrayInit p)
-
-deriving instance (ReadExtension p) => Read (ArrayInit p)
-
-deriving instance (DataExtension p) => Data (ArrayInit p)
-
-instance (EqualityExtension p) => Equality (ArrayInit p) where
-  eq opt (ArrayInit s1 vis1) (ArrayInit s2 vis2) =
-    eq opt s1 s2 && eq opt vis1 vis2
+instance (EqExtension p) => Eq (ArrayInit p) where
+  ArrayInit _ vis1 == ArrayInit _ vis2 = vis1 == vis2
 
 instance Located (ArrayInit p) where
   sourceSpan (ArrayInit s _) = s
@@ -1336,13 +909,7 @@ instance Located (ArrayInit p) where
 data MethodRefTarget
   = MethodRefIdent Ident
   | MethodRefConstructor
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality MethodRefTarget where
-  eq opt (MethodRefIdent i1) (MethodRefIdent i2) =
-    eq opt i1 i2
-  eq _ MethodRefConstructor MethodRefConstructor = True
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 ------------------------------------------------
 -- Types
@@ -1351,14 +918,7 @@ instance Equality MethodRefTarget where
 data Type
   = PrimType PrimType
   | RefType RefType
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality Type where
-  eq opt (PrimType pt1) (PrimType pt2) =
-    eq opt pt1 pt2
-  eq opt (RefType rt1) (RefType rt2) =
-    eq opt rt1 rt2
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 instance Located Type where
   sourceSpan (PrimType pt) = sourceSpan pt
@@ -1372,14 +932,12 @@ data RefType
   = ClassRefType ClassType
   | -- | TypeVariable Ident
     ArrayType SourceSpan Type
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality RefType where
-  eq opt (ClassRefType ct1) (ClassRefType ct2) =
-    eq opt ct1 ct2
-  eq opt (ArrayType s1 t1) (ArrayType s2 t2) =
-    eq opt s1 s2 && eq opt t1 t2
-  eq _ _ _ = False
+instance Eq RefType where
+  ClassRefType ct1 == ClassRefType ct2 = ct1 == ct2
+  ArrayType _ t1 == ArrayType _ t2 = t1 == t2
+  _ == _ = False
 
 instance Located RefType where
   sourceSpan (ClassRefType ct) = sourceSpan ct
@@ -1389,11 +947,10 @@ instance Located RefType where
 --   optionally followed by type arguments (in which case it is a parameterized type).
 data ClassType
   = ClassType SourceSpan (NonEmpty (Ident, [TypeArgument]))
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality ClassType where
-  eq opt (ClassType s1 ctss1) (ClassType s2 ctss2) =
-    eq opt s1 s2 && eq opt ctss1 ctss2
+instance Eq ClassType where
+  ClassType _ ctss1 == ClassType _ ctss2 = ctss1 == ctss2
 
 instance Located ClassType where
   sourceSpan (ClassType s _) = s
@@ -1402,48 +959,19 @@ instance Located ClassType where
 data TypeArgument
   = Wildcard (Maybe WildcardBound)
   | ActualType RefType
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality TypeArgument where
-  eq opt (Wildcard mwb1) (Wildcard mwb2) =
-    eq opt mwb1 mwb2
-  eq opt (ActualType rt1) (ActualType rt2) =
-    eq opt rt1 rt2
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 data TypeDeclSpecifier
   = TypeDeclSpecifier ClassType
-  | TypeDeclSpecifierWithDiamond ClassType Ident Diamond
-  | TypeDeclSpecifierUnqualifiedWithDiamond Ident Diamond
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality TypeDeclSpecifier where
-  eq opt (TypeDeclSpecifier ct1) (TypeDeclSpecifier ct2) =
-    eq opt ct1 ct2
-  eq opt (TypeDeclSpecifierWithDiamond ct1 i1 d1) (TypeDeclSpecifierWithDiamond ct2 i2 d2) =
-    eq opt ct1 ct2 && eq opt i1 i2 && eq opt d1 d2
-  eq opt (TypeDeclSpecifierUnqualifiedWithDiamond i1 d1) (TypeDeclSpecifierUnqualifiedWithDiamond i2 d2) =
-    eq opt i1 i2 && eq opt d1 d2
-  eq _ _ _ = False
-
-data Diamond = Diamond
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality Diamond where
-  eq _ _ _ = True
+  | TypeDeclSpecifierWithDiamond ClassType Ident
+  | TypeDeclSpecifierUnqualifiedWithDiamond Ident
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | Wildcards may be given explicit bounds, either upper (@extends@) or lower (@super@) bounds.
 data WildcardBound
   = ExtendsBound RefType
   | SuperBound RefType
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality WildcardBound where
-  eq opt (ExtendsBound rt1) (ExtendsBound rt2) =
-    eq opt rt1 rt2
-  eq opt (SuperBound rt1) (SuperBound rt2) =
-    eq opt rt1 rt2
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | A primitive type is predefined by the Java programming language and named by its reserved keyword.
 data PrimType
@@ -1455,18 +983,18 @@ data PrimType
   | CharT SourceSpan
   | FloatT SourceSpan
   | DoubleT SourceSpan
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality PrimType where
-  eq opt (BooleanT s1) (BooleanT s2) = eq opt s1 s2
-  eq opt (ByteT s1) (ByteT s2) = eq opt s1 s2
-  eq opt (ShortT s1) (ShortT s2) = eq opt s1 s2
-  eq opt (IntT s1) (IntT s2) = eq opt s1 s2
-  eq opt (LongT s1) (LongT s2) = eq opt s1 s2
-  eq opt (CharT s1) (CharT s2) = eq opt s1 s2
-  eq opt (FloatT s1) (FloatT s2) = eq opt s1 s2
-  eq opt (DoubleT s1) (DoubleT s2) = eq opt s1 s2
-  eq _ _ _ = False
+instance Eq PrimType where
+  BooleanT _ == BooleanT _ = True
+  ByteT _ == ByteT _ = True
+  ShortT _ == ShortT _ = True
+  IntT _ == IntT _ = True
+  LongT _ == LongT _ = True
+  CharT _ == CharT _ = True
+  FloatT _ == FloatT _ = True
+  DoubleT _ == DoubleT _ = True
+  _ == _ = False
 
 instance Located PrimType where
   sourceSpan (BooleanT s) = s
@@ -1488,26 +1016,18 @@ data Literal
   | Char SourceSpan Char
   | String SourceSpan String
   | Null SourceSpan
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality Literal where
-  eq opt (Int s1 n1) (Int s2 n2) =
-    eq opt s1 s2 && n1 == n2
-  eq opt (Word s1 n1) (Word s2 n2) =
-    eq opt s1 s2 && n1 == n2
-  eq opt (Float s1 x1) (Float s2 x2) =
-    eq opt s1 s2 && x1 == x2
-  eq opt (Double s1 x1) (Double s2 x2) =
-    eq opt s1 s2 && x1 == x2
-  eq opt (Boolean s1 b1) (Boolean s2 b2) =
-    eq opt s1 s2 && b1 == b2
-  eq opt (Char s1 c1) (Char s2 c2) =
-    eq opt s1 s2 && c1 == c2
-  eq opt (String s1 str1) (String s2 str2) =
-    eq opt s1 s2 && str1 == str2
-  eq opt (Null s1) (Null s2) =
-    eq opt s1 s2
-  eq _ _ _ = False
+instance Eq Literal where
+  Int _ n1 == Int _ n2 = n1 == n2
+  Word _ n1 == Word _ n2 = n1 == n2
+  Float _ x1 == Float _ x2 = x1 == x2
+  Double _ x1 == Double _ x2 = x1 == x2
+  Boolean _ b1 == Boolean _ b2 = b1 == b2
+  Char _ c1 == Char _ c2 = c1 == c2
+  String _ str1 == String _ str2 = str1 == str2
+  Null _ == Null _ = True
+  _ == _ = False
 
 instance Located Literal where
   sourceSpan (Int s _) = s
@@ -1522,33 +1042,27 @@ instance Located Literal where
 -- | A class is generic if it declares one or more type variables. These type variables are known
 --   as the type parameters of the class.
 data TypeParam = TypeParam Ident [RefType]
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality TypeParam where
-  eq opt (TypeParam i1 rts1) (TypeParam i2 rts2) =
-    eq opt i1 i2 && eq opt rts1 rts2
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -----------------------------------------------------------------------
 -- Names and identifiers
 
 -- | A single identifier.
 data Ident = Ident SourceSpan String
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality Ident where
-  eq opt (Ident s1 str1) (Ident s2 str2) =
-    eq opt s1 s2 && str1 == str2
+instance Eq Ident where
+  Ident _ str1 == Ident _ str2 = str1 == str2
 
 instance Located Ident where
   sourceSpan (Ident s _) = s
 
 -- | A name, i.e. a period-separated list of identifiers.
 data Name = Name SourceSpan (NonEmpty Ident)
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality Name where
-  eq opt (Name s1 ids1) (Name s2 ids2) =
-    eq opt s1 s2 && eq opt ids1 ids2
+instance Eq Name where
+  Name _ ids1 == Name _ ids2 = ids1 == ids2
 
 instance Located Name where
   sourceSpan (Name s _) = s
@@ -1557,14 +1071,12 @@ data ClassifiedExpressionName
   = -- a.b.c - LocalFieldAccess a [b,c]
     LocalFieldAccess SourceSpan Ident [Ident]
   | Other Name
-  deriving (Show, Read, Typeable, Generic, Data)
+  deriving (Show, Typeable, Generic, Data)
 
-instance Equality ClassifiedExpressionName where
-  eq opt (LocalFieldAccess s1 i1 is1) (LocalFieldAccess s2 i2 is2) =
-    eq opt s1 s2 && eq opt i1 i2 && eq opt is1 is2
-  eq opt (Other n1) (Other n2) =
-    eq opt n1 n2
-  eq _ _ _ = False
+instance Eq ClassifiedExpressionName where
+  LocalFieldAccess _ i1 is1 == LocalFieldAccess _ i2 is2 = i1 == i2 && is1 == is2
+  Other n1 == Other n2 = n1 == n2
+  _ == _ = False
 
 instance Located ClassifiedExpressionName where
   sourceSpan (LocalFieldAccess s _ _) = s
@@ -1574,16 +1086,7 @@ data ClassifiedName
   = ExpressionName ClassifiedExpressionName
   | TypeName Name
   | Unknown Name
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality ClassifiedName where
-  eq opt (ExpressionName n1) (ExpressionName n2) =
-    eq opt n1 n2
-  eq opt (TypeName n1) (TypeName n2) =
-    eq opt n1 n2
-  eq opt (Unknown n1) (Unknown n2) =
-    eq opt n1 n2
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 instance Located ClassifiedName where
   sourceSpan (ExpressionName n) = sourceSpan n
@@ -1614,29 +1117,7 @@ data Op
   | Xor
   | CAnd
   | COr
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality Op where
-  eq _ Mult Mult = True
-  eq _ Div Div = True
-  eq _ Rem Rem = True
-  eq _ Add Add = True
-  eq _ Sub Sub = True
-  eq _ LShift LShift = True
-  eq _ RShift RShift = True
-  eq _ RRShift RRShift = True
-  eq _ LThan LThan = True
-  eq _ GThan GThan = True
-  eq _ LThanE LThanE = True
-  eq _ GThanE GThanE = True
-  eq _ Equal Equal = True
-  eq _ NotEq NotEq = True
-  eq _ And And = True
-  eq _ Or Or = True
-  eq _ Xor Xor = True
-  eq _ CAnd CAnd = True
-  eq _ COr COr = True
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | An assignment operator.
 data AssignOp
@@ -1652,19 +1133,4 @@ data AssignOp
   | AndA
   | XorA
   | OrA
-  deriving (Show, Read, Typeable, Generic, Data)
-
-instance Equality AssignOp where
-  eq _ EqualA EqualA = True
-  eq _ MultA MultA = True
-  eq _ DivA DivA = True
-  eq _ RemA RemA = True
-  eq _ AddA AddA = True
-  eq _ SubA SubA = True
-  eq _ LShiftA LShiftA = True
-  eq _ RShiftA RShiftA = True
-  eq _ RRShiftA RRShiftA = True
-  eq _ AndA AndA = True
-  eq _ XorA XorA = True
-  eq _ OrA OrA = True
-  eq _ _ _ = False
+  deriving (Show, Typeable, Generic, Data, Eq)

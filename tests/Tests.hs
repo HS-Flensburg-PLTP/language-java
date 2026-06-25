@@ -197,13 +197,13 @@ main = do
         testProperty
           "parsing.generating==id (compilationUnit)"
           ( \g -> case parserWithState (ParserState ParseFull False) compilationUnit "<input>" (show $ pretty g) of
-              Right g' -> eq IgnoreSourceSpan g g'
+              Right g' -> g == g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),
         testProperty
           "parsing.generating==id (exp)"
           ( \g -> case parserWithState (ParserState ParseFull False) (fst <$> exp) "<input>" (show $ pretty g) of
-              Right g' -> counterexample (show $ pretty g) $ counterexample (show g') $ eq IgnoreSourceSpan g g'
+              Right g' -> counterexample (show $ pretty g) $ counterexample (show g') $ g == g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),
         testGroup "binary operators" testBinOp,

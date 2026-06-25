@@ -57,8 +57,7 @@ Library
                         Language.Java.Syntax.VarInit
                         Language.Java.Syntax.Literal
  
-  Other-modules:	      Language.Java.Equality
-                        Language.Java.Syntax.IdentCollection
+  Other-modules:        Language.Java.Syntax.IdentCollection
                         Language.Java.Syntax.ClassInfo
 
 

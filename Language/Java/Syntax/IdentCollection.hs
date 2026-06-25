@@ -12,10 +12,6 @@ module Language.Java.Syntax.IdentCollection
   )
 where
 
-import Language.Java.Equality
-  ( EqOptions (IgnoreSourceSpan),
-    Equality (eq),
-  )
 import Language.Java.Syntax (Ident)
 import Language.Java.Syntax.ClassInfo (ClassInfo)
 
@@ -46,16 +42,15 @@ addToClassInfos classTreesNew identCollection = identCollection {icClassInfos = 
 
 isExpressionIdent :: Ident -> IdentCollection -> Bool
 isExpressionIdent idnt ic =
-  any (eq IgnoreSourceSpan idnt) (icLocalVars ic)
-    || any (eq IgnoreSourceSpan idnt) (icFormalParams ic)
-    || any (eq IgnoreSourceSpan idnt) (icFields ic)
+  elem idnt (icLocalVars ic)
+    || elem idnt (icFormalParams ic)
+    || elem idnt (icFields ic)
 
 isField :: Ident -> IdentCollection -> Bool
-isField idnt ic =
-  any (eq IgnoreSourceSpan idnt) (icFields ic)
+isField idnt ic = idnt `elem` icFields ic
 
 isImportedClass :: Ident -> IdentCollection -> Bool
-isImportedClass idnt ic = any (eq IgnoreSourceSpan idnt) (icImportedClasses ic)
+isImportedClass idnt ic = idnt `elem` icImportedClasses ic
 
 empty :: IdentCollection
 empty = IdentCollection [] [] [] [] []
