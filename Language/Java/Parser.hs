@@ -60,6 +60,7 @@ module Language.Java.Parser
   )
 where
 
+import qualified Data.Bifunctor as Bifunctor
 import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -88,9 +89,6 @@ import Text.Parsec.Pos
 import Text.ParserCombinators.Parsec.Error
 import Prelude hiding (exp, (>>), (>>=))
 import qualified Prelude as P ((>>), (>>=))
-
-mapFst :: (a -> b) -> (a, c) -> (b, c)
-mapFst f (x, y) = (f x, y)
 
 data ParserState = ParserState
   { ps_mode :: ParserMode,
@@ -588,8 +586,8 @@ localVarDecl = do
 
 varInit :: P (VarInit Parsed, SourcePos)
 varInit =
-  mapFst InitArray <$> arrayInit
-    <|> mapFst InitExp <$> exp
+  Bifunctor.first InitArray <$> arrayInit
+    <|> Bifunctor.first InitExp <$> exp
 
 arrayInit :: P (ArrayInit Parsed, SourcePos)
 arrayInit = braces $ do
@@ -644,7 +642,7 @@ blockStmt =
           return (LocalVars (startLoc, endLoc) m t vds, endLoc)
       )
     <|> do
-      mapFst BlockStmt <$> stmt
+      Bifunctor.first BlockStmt <$> stmt
 
 stmt :: P (Stmt Parsed, SourcePos)
 stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
@@ -761,7 +759,7 @@ stmtNoTrail =
   )
     <|>
     -- inner block
-    mapFst StmtBlock <$> block
+    Bifunctor.first StmtBlock <$> block
     <|>
     -- assertions
     ( do
@@ -1133,12 +1131,12 @@ postfixExpNES :: P (Exp Parsed, SourcePos)
 postfixExpNES =
   -- try postIncDec <|>
   try primary
-    <|> mapFst ExpName <$> name
+    <|> Bifunctor.first ExpName <$> name
 
 postfixExp :: P (Exp Parsed, SourcePos)
 postfixExp = do
   startLoc <- getLocation
-  postfixExpNES |>> (mapFst (\op -> op startLoc) <$> postfixOp)
+  postfixExpNES |>> (Bifunctor.first (\op -> op startLoc) <$> postfixOp)
 
 primary :: P (Exp Parsed, SourcePos)
 primary = primaryNPS |>> primarySuffix
@@ -1152,7 +1150,7 @@ primaryNPS = try arrayCreation <|> primaryNoNewArrayNPS
 primaryNoNewArrayNPS :: P (Exp Parsed, SourcePos)
 primaryNoNewArrayNPS = do
   startLoc <- getLocation
-  mapFst Lit <$> literal
+  Bifunctor.first Lit <$> literal
     <|> ( do
             (_, loc) <- tokWithEndLoc KW_This
             return (This (startLoc, loc), loc)
@@ -1175,16 +1173,16 @@ primaryNoNewArrayNPS = do
           return (ThisClass (startLoc, loc) n, loc)
       )
     <|> try instanceCreationNPS
-    <|> try (mapFst MethodInv <$> methodInvocationNPS)
-    <|> try (mapFst FieldAccess <$> fieldAccessNPS)
-    <|> mapFst ArrayAccess <$> arrayAccessNPS
+    <|> try (Bifunctor.first MethodInv <$> methodInvocationNPS)
+    <|> try (Bifunctor.first FieldAccess <$> fieldAccessNPS)
+    <|> Bifunctor.first ArrayAccess <$> arrayAccessNPS
 
 primarySuffix :: P (Exp Parsed -> Exp Parsed, SourcePos)
 primarySuffix =
   try instanceCreationSuffix
-    <|> try (mapFst (ArrayAccess .) <$> arrayAccessSuffix)
-    <|> try (mapFst (MethodInv .) <$> methodInvocationSuffix)
-    <|> mapFst (FieldAccess .) <$> fieldAccessSuffix
+    <|> try (Bifunctor.first (ArrayAccess .) <$> arrayAccessSuffix)
+    <|> try (Bifunctor.first (MethodInv .) <$> methodInvocationSuffix)
+    <|> Bifunctor.first (FieldAccess .) <$> fieldAccessSuffix
 
 instanceCreationNPS :: P (Exp Parsed, SourcePos)
 instanceCreationNPS =
@@ -1276,7 +1274,7 @@ methodRef = do
   startLoc <- getLocation
   n <- noLoc name
   tok MethodRefSep
-  (mrt, loc) <- attrTokWithEndLoc KW_New MethodRefConstructor <|> mapFst MethodRefIdent <$> ident
+  (mrt, loc) <- attrTokWithEndLoc KW_New MethodRefConstructor <|> Bifunctor.first MethodRefIdent <$> ident
   return (MethodRef (startLoc, loc) n mrt, loc)
 
 {-
@@ -1582,7 +1580,7 @@ refType = do
       pt <- primType
       (_, loc) :| bs <- list1NoLoc emptyBrackets
       return
-        ( mapFst
+        ( Bifunctor.first
             (\a -> a pt)
             ( foldl
                 (f startLoc)
@@ -1595,7 +1593,7 @@ refType = do
             (ct, ctLoc) <- classType
             bs <- list emptyBrackets
             return
-              ( mapFst
+              ( Bifunctor.first
                   (\a -> a ct)
                   ( foldl
                       (f startLoc)
@@ -1623,7 +1621,7 @@ classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
 classTypeSpec = do
   (i, iLoc) <- ident
   mtas <- opt typeArgs
-  let (tas, loc) = maybe ([], iLoc) (mapFst NonEmpty.toList) mtas
+  let (tas, loc) = maybe ([], iLoc) (Bifunctor.first NonEmpty.toList) mtas
   return ((i, tas), loc)
 
 resultType :: P (Maybe Type)
@@ -1742,7 +1740,7 @@ seplist :: P (a, SourcePos) -> P sep -> P ([a], SourcePos)
 -- seplist = sepBy
 seplist p sep = do
   startLoc <- getLocation
-  option ([], startLoc) (mapFst NonEmpty.toList <$> seplist1 p sep)
+  option ([], startLoc) (Bifunctor.first NonEmpty.toList <$> seplist1 p sep)
 
 seplistNoLoc :: P a -> P sep -> P [a]
 -- seplist = sepBy
