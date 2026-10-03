@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Language.Java.Parser
@@ -68,7 +69,7 @@ import Language.Java.SourceSpan (dummyLocation, locationEof)
 import Language.Java.Syntax
 import Text.Parsec
   ( Parsec,
-    State (stateInput, statePos),
+    State (stateInput, statePos, stateUser),
     chainl1,
     eof,
     getParserState,
@@ -111,28 +112,20 @@ noLoc :: P (a, SourcePos) -> P a
 noLoc = fmap fst
 
 getLocation :: P SourcePos
-getLocation = do
-  myState <- getState
-  if ps_locations myState
-    then do
-      state <- getParserState
-      case stateInput state of
-        [] -> return locationEof
-        _ -> return (statePos state)
-    else return dummyLocation
+getLocation =
+  getParserState <&> \case
+    (ps_locations . stateUser -> False) -> dummyLocation
+    (stateInput -> []) -> locationEof
+    state -> statePos state
 
 getEndLoc :: P SourcePos
-getEndLoc = do
-  state <- getState
-  if ps_locations state
-    then do
-      parserState <- getParserState
-      case stateInput parserState of
-        [] -> return locationEof
-        L1 (line, column) len _ : _ ->
-          let file = sourceName (statePos parserState)
-           in return (newPos file line (column + len))
-    else return dummyLocation
+getEndLoc =
+  getParserState <&> \case
+    (ps_locations . stateUser -> False) -> dummyLocation
+    state@(stateInput -> L1 (line, column) len _ : _) ->
+      let file = sourceName (statePos state)
+       in newPos file line (column + len)
+    _ -> locationEof
 
 -- A trick to allow >> and >>=, normally infixr 1, to be
 -- used inside branches of <|>, which is declared as infixl 1.
