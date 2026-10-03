@@ -1,9 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Language.Java.Parser
   ( JavaParser,
