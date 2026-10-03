@@ -235,7 +235,7 @@ extends :: P (NonEmpty RefType)
 extends = tok KW_Extends >> refTypeList
 
 permits :: P (NonEmpty RefType)
-permits = fixedIdent "permits" () >> refTypeList
+permits = fixedIdent "permits" >> refTypeList
 
 implements :: P (NonEmpty RefType)
 implements = tok KW_Implements >> refTypeList
@@ -1640,16 +1640,13 @@ ident = do
     _ -> Nothing
   return (i, loc)
 
-fixedIdent :: String -> a -> P a
-fixedIdent fixed result =
-  javaToken $ \case
-    IdentTok s | s == fixed -> Just result
-    _ -> Nothing
+fixedIdent :: String -> P ()
+fixedIdent = tok . IdentTok
 
 attrFixedIdent :: String -> a -> P (a, SourcePos)
 attrFixedIdent fixed result = do
   loc <- getEndLoc
-  a <- fixedIdent fixed result
+  a <- fixedIdent fixed $> result
   return (a, loc)
 
 ------------------------------------------------------------
