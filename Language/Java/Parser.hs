@@ -49,12 +49,14 @@ module Language.Java.Parser
     nelist,
     seplist,
     seplist1,
-    bopt,
+    optionMaybeLoc,
+    optionMap,
+    optionConst,
+    optionBool,
     comma,
     semiColon,
     period,
     colon,
-    optionMaybeLoc,
   )
 where
 
@@ -63,7 +65,7 @@ import Data.Functor (($>), (<&>))
 import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (catMaybes)
 import Language.Java.Lexer (L1 (..), Token (..), lexer)
 import Language.Java.SourceSpan (dummyLocation, locationEof)
 import Language.Java.Syntax
@@ -182,9 +184,9 @@ importDecl :: P ImportDecl
 importDecl = do
   startLoc <- getLocation
   tok KW_Import
-  st <- bopt $ tok KW_Static
+  st <- optionBool $ tok KW_Static
   n <- noLoc name
-  star <- bopt (period >> tok Op_Star)
+  star <- optionBool (period >> tok Op_Star)
   endLoc <- tokWithEndLoc SemiColon
   return (ImportDecl (startLoc, endLoc) st n star)
 
@@ -318,7 +320,7 @@ classBodyStatement =
     <|> try
       ( do
           startLoc <- getLocation
-          mst <- bopt (tok KW_Static)
+          mst <- optionBool (tok KW_Static)
           (bl, endLoc) <- block
           return (Just (InitDecl (startLoc, endLoc) mst bl))
       )
@@ -473,7 +475,7 @@ formalParam = do
   startLoc <- getLocation
   ms <- many modifier
   typ <- ttype
-  var <- bopt ellipsis
+  var <- optionBool ellipsis
   (vdi, loc) <- varDeclId
   return (FormalParam (startLoc, loc) ms typ var vdi)
 
@@ -582,8 +584,8 @@ arrayInit :: P (ArrayInit Parsed, SourcePos)
 arrayInit = braces $ do
   startLoc <- getLocation
   (vis, visLoc) <- seplist varInit comma
-  mtrailing <- optionMaybe (tokWithEndLoc Comma)
-  return (ArrayInit (startLoc, fromMaybe visLoc mtrailing) vis)
+  mtrailing <- option visLoc (tokWithEndLoc Comma)
+  return (ArrayInit (startLoc, mtrailing) vis)
 
 ----------------------------------------------------------------------------
 -- Statements
@@ -1067,14 +1069,11 @@ relExp = do
           <|> attrTok Op_LThanE LThanE
           <|> attrTok Op_GThanE GThanE
       )
-  fromMaybe (e, endLoc)
-    <$> optionMaybe
-      ( do
-          tok KW_Instanceof
-          (t, refLoc) <- refType
-          (mName, loc) <- optionMaybeLoc refLoc name
-          return (InstanceOf (startLoc, loc) e t mName, loc)
-      )
+  option (e, endLoc) do
+    tok KW_Instanceof
+    (t, refLoc) <- refType
+    (mName, loc) <- optionMaybeLoc refLoc name
+    return (InstanceOf (startLoc, loc) e t mName, loc)
 
 shiftExp :: P (Exp Parsed, SourcePos)
 shiftExp =
@@ -1344,11 +1343,10 @@ methodInvocationNPS = do
     <|> ( do
             n <- noLoc name
             period
-            msp <- optionMaybe (tok KW_Super >> period)
+            constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
             rts <- neoptList refTypeArgs
             i <- noLoc ident
             (as, loc) <- args
-            let constr = maybe TypeMethodCall (const ClassMethodCall) msp
             return (constr (startLoc, loc) n rts i as, loc)
         )
 
@@ -1412,11 +1410,10 @@ methodInvocation =
         f <- (do as <- args
                  return $ \n -> MethodCall n as) <|>
              (period >> do
-                msp <- optionMaybe (tok KW_Super >> period)
+                mc <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
                 rts <- option [] refTypeArgs
                 i   <- ident
                 as  <- args
-                let mc = maybe TypeMethodCall (const ClassMethodCall) msp
                 return $ \n -> mc n rts i as)
         return $ f n)
 -}
@@ -1672,17 +1669,35 @@ attrFixedIdent fixed result = do
 
 ------------------------------------------------------------
 
--- | @optionMaybeLoc loc p@ tries to apply parser @p@.  If @p@ fails without
--- consuming input, it returns @('Nothing', loc)@, otherwise it returns
--- 'Data.Bifunctor.first' 'Just' the value returned by @p@.
+-- | @optionMaybeLoc loc p@ tries to apply parser @p@.
+-- If @p@ fails without consuming input, it returns @('Nothing', loc)@,
+-- otherwise it returns 'Data.Bifunctor.first' 'Just' the value returned by @p@.
 optionMaybeLoc :: SourcePos -> P (a, SourcePos) -> P (Maybe a, SourcePos)
 optionMaybeLoc loc p = option (Nothing, loc) (Bifunctor.first Just <$> p)
 
-bopt :: P a -> P Bool
-bopt p = isJust <$> optionMaybe p
+-- | @optionMap x f p@ tries to apply parser @p@.
+-- If @p@ fails without consuming input, it returns @x@,
+-- otherwise it returns @f@ the value returned by @p@.
+optionMap :: b -> (a -> b) -> P a -> P b
+optionMap a b p = option a (b <$> p)
 
+-- | @optionConst a b p@ tries to apply parser @p@.
+-- If @p@ fails without consuming input, it returns @a@,
+-- otherwise it returns @b@.
+optionConst :: b -> b -> P a -> P b
+optionConst a b = optionMap a (const b)
+
+-- | @optionBool p@ tries to apply parser @p@.
+-- If @p@ fails without consuming input, it returns 'False',
+-- otherwise it returns 'True'.
+optionBool :: P a -> P Bool
+optionBool = optionConst False True
+
+-- | @neoptList p@ tries to apply parser @p@.
+-- If @p@ fails without consuming input, it returns '[]',
+-- otherwise it returns 'Data.List.NonEmpty.toList' the value returned by @p@.
 neoptList :: P (NonEmpty a) -> P [a]
-neoptList p = maybe [] NonEmpty.toList <$> optionMaybe p
+neoptList = optionMap [] NonEmpty.toList
 
 nelist :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
 nelist p = do
@@ -1700,7 +1715,7 @@ seplist p sep =
     <|> ([],) <$> getLocation
 
 seplistNoLoc :: P a -> P sep -> P [a]
-seplistNoLoc p sep = option [] $ NonEmpty.toList <$> seplist1NoLoc p sep
+seplistNoLoc p sep = optionMap [] NonEmpty.toList $ seplist1NoLoc p sep
 
 seplist1 :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
 seplist1 p sep = seplist1NoLoc p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
