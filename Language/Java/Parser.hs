@@ -46,9 +46,12 @@ module Language.Java.Parser
     typeParam,
     name,
     ident,
-    nelist,
-    seplist,
-    seplist1,
+    manyNonEmpty,
+    manyNonEmptyLoc,
+    sepByNonEmpty,
+    sepByNonEmptyLoc,
+    sepEndByLoc,
+    trySepByNonEmptyLoc,
     optionMaybeLoc,
     optionMap,
     optionConst,
@@ -62,6 +65,7 @@ where
 
 import qualified Data.Bifunctor as Bifunctor
 import Data.Functor (($>), (<&>))
+import Data.Functor (void, ($>), (<&>))
 import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -80,8 +84,9 @@ import Text.Parsec
     many1,
     option,
     optionMaybe,
-    optional,
     runParser,
+    sepBy,
+    sepEndBy,
     token,
     try,
     (<?>),
@@ -177,7 +182,7 @@ packageDecl :: P PackageDecl
 packageDecl = do
   tok KW_Package
   n <- noLoc name
-  semiColon
+  void semiColon
   return $ PackageDecl n
 
 importDecl :: P ImportDecl
@@ -248,7 +253,7 @@ recordClassDecl = do
   tok KW_Record
   i <- noLoc ident
   tps <- neoptList typeParams
-  fields <- noLoc $ parens (seplistNoLoc recordField comma)
+  fields <- noLoc $ parens $ sepBy recordField comma
   imp <- neoptList implements
   (bod, endLoc) <- classBody
   return (\loc ms -> RecordDecl (loc, endLoc) ms i tps fields imp bod, endLoc)
@@ -265,8 +270,7 @@ classBody = do
 
 enumBody :: P (EnumBody Parsed, SourcePos)
 enumBody = braces $ do
-  ecs <- seplistNoLoc enumConst comma
-  optional comma
+  ecs <- sepEndBy enumConst comma
   eds <- option [] enumBodyDecls
   return $ EnumBody ecs eds
 
@@ -314,7 +318,7 @@ classBodyStatement :: P (Maybe (Decl Parsed))
 classBodyStatement =
   try
     ( do
-        _ <- nelistNoLoc (tokWithEndLoc SemiColon)
+        _ <- manyNonEmpty (tokWithEndLoc SemiColon)
         return Nothing
     )
     <|> try
@@ -351,8 +355,7 @@ fieldDecl :: P (Mod (MemberDecl Parsed))
 fieldDecl = do
   typ <- ttype
   vds <- varDecls
-  endLoc <- getEndLoc
-  semiColon
+  endLoc <- semiColon
   return $ \loc ms -> FieldDecl (loc, endLoc) ms typ vds
 
 methodDecl :: P (Mod (MemberDecl Parsed))
@@ -408,7 +411,7 @@ explConstrInv =
         )
       <|> ( do
               pri <- noLoc primary
-              period
+              void period
               rts <- neoptList refTypeArgs
               tok KW_Super
               PrimarySuperInvoke pri rts <$> noLoc args
@@ -446,8 +449,7 @@ absMethodDecl = do
   fps <- formalParams
   thr <- neoptList throws
   def <- optionMaybe defaultValue
-  endLoc <- getEndLoc
-  semiColon
+  endLoc <- semiColon
   return $ \loc ms -> MethodDecl (loc, endLoc) ms tps rt i fps thr def (MethodBody Nothing)
 
 defaultValue :: P (Exp Parsed)
@@ -460,7 +462,7 @@ throws = tok KW_Throws >> refTypeList
 
 formalParams :: P [FormalParam Parsed]
 formalParams = noLoc $ parens $ do
-  fps <- seplistNoLoc formalParam comma
+  fps <- sepBy formalParam comma
   if validateFPs fps
     then return fps
     else fail "Only the last formal parameter may be of variable arity"
@@ -482,11 +484,11 @@ formalParam = do
 catchFormalParam :: P (CatchFormalParam Parsed)
 catchFormalParam = do
   startLoc <- getLocation
-  typs <- seplist1NoLoc ((,) <$> many modifier <*> ttype) (tok Op_Or)
+  typs <- sepByNonEmpty ((,) <$> many modifier <*> ttype) (tok Op_Or)
   (vdi, loc) <- varDeclId
   return (CatchFormalParam (startLoc, loc) typs vdi)
 
-ellipsis :: P ()
+ellipsis :: P SourcePos
 ellipsis = period >> period >> period
 
 -- Modifiers
@@ -530,7 +532,7 @@ annotation = do
     <|> return (MarkerAnnotation (startLoc, nLoc) n)
 
 evlist :: P (NonEmpty (Ident, ElementValue Parsed))
-evlist = seplist1NoLoc elementValuePair comma
+evlist = sepByNonEmpty elementValuePair comma
 
 elementValuePair :: P (Ident, ElementValue Parsed)
 elementValuePair = (,) <$> noLoc ident <* tok Op_Equal <*> elementValue
@@ -548,7 +550,7 @@ elementValue =
 -- Variable declarations
 
 varDecls :: P (NonEmpty (VarDecl Parsed))
-varDecls = seplist1NoLoc varDecl comma
+varDecls = sepByNonEmpty varDecl comma
 
 varDecl :: P (VarDecl Parsed)
 varDecl = do
@@ -583,9 +585,8 @@ varInit =
 arrayInit :: P (ArrayInit Parsed, SourcePos)
 arrayInit = braces $ do
   startLoc <- getLocation
-  (vis, visLoc) <- seplist varInit comma
-  mtrailing <- option visLoc (tokWithEndLoc Comma)
-  return (ArrayInit (startLoc, mtrailing) vis)
+  (vis, visLoc) <- sepEndByLoc varInit comma
+  return (ArrayInit (startLoc, visLoc) vis)
 
 ----------------------------------------------------------------------------
 -- Statements
@@ -668,9 +669,9 @@ stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
             try
               ( do
                   fi <- optionMaybe forInit
-                  semiColon
+                  void semiColon
                   e <- optionMaybe (noLoc exp)
-                  semiColon
+                  void semiColon
                   fu <- forUp
                   return (\loc -> BasicFor (startLoc, loc) fi e fu)
               )
@@ -678,7 +679,7 @@ stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
                       ms <- many modifier
                       t <- ttype
                       i <- noLoc ident
-                      colon
+                      void colon
                       e <- noLoc exp
                       return (\loc -> EnhancedFor (startLoc, loc) ms t i e)
                   )
@@ -687,7 +688,7 @@ stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
     labeledStmt = try $ do
       startLoc <- getLocation
       lbl <- noLoc ident
-      colon
+      void colon
       (s, endLoc) <- stmt
       return (Labeled (startLoc, endLoc) lbl s, endLoc)
 
@@ -717,9 +718,9 @@ stmtNSI = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
             try
               ( do
                   fi <- optionMaybe forInit
-                  semiColon
+                  void semiColon
                   e <- optionMaybe (noLoc exp)
-                  semiColon
+                  void semiColon
                   fu <- forUp
                   return (\loc -> BasicFor (startLoc, loc) fi e fu)
               )
@@ -727,7 +728,7 @@ stmtNSI = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
                       ms <- many modifier
                       t <- ttype
                       i <- noLoc ident
-                      colon
+                      void colon
                       e <- noLoc exp
                       return (\loc -> EnhancedFor (startLoc, loc) ms t i e)
                   )
@@ -736,7 +737,7 @@ stmtNSI = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
     labeledStmt = try $ do
       startLoc <- getLocation
       i <- noLoc ident
-      colon
+      void colon
       (s, endLoc) <- stmtNSI
       return (Labeled (startLoc, endLoc) i s, endLoc)
 
@@ -861,10 +862,10 @@ forInit =
             return (ForLocalVars m t vds)
         )
   )
-    <|> (seplist1NoLoc stmtExp comma <&> ForInitExps)
+    <|> ForInitExps <$> sepByNonEmpty stmtExp comma
 
 forUp :: P [Exp Parsed]
-forUp = seplistNoLoc stmtExp comma
+forUp = sepBy stmtExp comma
 
 -- Switches
 
@@ -894,7 +895,7 @@ switchLabelOld =
   (tok KW_Default >> attrTokWithEndLoc Op_Colon Default)
     <|> ( do
             tok KW_Case
-            es <- noLoc (seplist1 condExp comma)
+            es <- sepByNonEmpty (noLoc condExp) comma
             attrTokWithEndLoc Op_Colon (SwitchCase es)
         )
 
@@ -907,13 +908,11 @@ switchStmtNew = do
 
 switchLabelNew :: P (SwitchLabel Parsed)
 switchLabelNew =
-  tok KW_Default >> tok LambdaArrow $> Default
-    <|> ( do
-            tok KW_Case
-            es <- noLoc (seplist1 condExp comma)
-            tok LambdaArrow
-            return $ SwitchCase es
-        )
+  SwitchCase
+    <$ tok KW_Case
+    <*> sepByNonEmpty (noLoc condExp) comma
+    <* tok LambdaArrow
+    <|> Default <$ tok KW_Default <* tok LambdaArrow
 
 switchExp :: P (Exp Parsed, SourcePos)
 switchExp = do
@@ -931,10 +930,7 @@ switchExp = do
           <|> (SwitchExpBranchBlock <$> try (blockStmt >>= \s -> return [fst s]))
           <|> (SwitchExpBranchExp <$> branchExp)
       return (SwitchExpBranch lbl body)
-    branchExp = do
-      e <- noLoc exp
-      semiColon
-      return e
+    branchExp = noLoc exp <* semiColon
 
 -- Try-catch clauses
 
@@ -947,23 +943,12 @@ catch = do
 
 tryResourceList :: P [TryResource Parsed]
 tryResourceList = do
-  l <-
-    optionMaybe
-      ( noLoc
-          ( parens $ do
-              l <- seplistNoLoc tryResource semiColon
-              _ <- optionMaybe semiColon
-              return l
-          )
-      )
-  case l of
-    Just xs -> return xs
-    Nothing -> return []
+  option [] $ noLoc $ parens $ sepEndBy tryResource semiColon
   where
     tryResource =
-      (TryResourceVarDecl <$> try resourceDecl)
-        <|> (TryResourceQualAccess <$> try fieldAccess)
-        <|> (TryResourceVarAccess <$> noLoc ident)
+      TryResourceVarDecl <$> try resourceDecl
+        <|> TryResourceQualAccess <$> try fieldAccess
+        <|> TryResourceVarAccess <$> noLoc ident
 
 resourceDecl :: P (ResourceDecl Parsed)
 resourceDecl = do
@@ -997,7 +982,7 @@ postIncDec :: P (Exp Parsed)
 postIncDec = do
   startLoc <- getLocation
   e <- noLoc postfixExpNES
-  ops <- noLoc $ nelist postfixOp
+  ops <- manyNonEmpty (noLoc postfixOp)
   return (foldl (\a s -> s startLoc a) e ops)
 
 assignment :: P (Exp Parsed, SourcePos)
@@ -1029,7 +1014,7 @@ condExpSuffix :: SourcePos -> P (Exp Parsed -> Exp Parsed, SourcePos)
 condExpSuffix startLoc = do
   tok Op_Query
   th <- noLoc exp
-  colon
+  void colon
   (el, endLoc) <- condExp
   return (\ce -> Cond (startLoc, endLoc) ce th el, endLoc)
 
@@ -1181,7 +1166,7 @@ typeDeclSpecifier =
   try
     ( do
         ct <- noLoc classType
-        period
+        void period
         i <- noLoc ident
         tok Op_LThan
         tok Op_GThan
@@ -1223,8 +1208,8 @@ instanceCreation =
 lambdaParams :: P (LambdaParams Parsed)
 lambdaParams =
   try (LambdaSingleParam <$> noLoc ident)
-    <|> try (noLoc (parens (LambdaFormalParams <$> seplistNoLoc formalParam comma)))
-    <|> noLoc (parens (LambdaInferredParams <$> noLoc (seplist ident comma)))
+    <|> try (noLoc (parens (LambdaFormalParams <$> sepBy formalParam comma)))
+    <|> noLoc (parens (LambdaInferredParams <$> sepBy (noLoc ident) comma))
 
 lambdaExp :: P (Exp Parsed, SourcePos)
 lambdaExp = do
@@ -1271,13 +1256,13 @@ fieldAccessNPS :: P (FieldAccess Parsed, SourcePos)
 fieldAccessNPS = do
   startLoc <- getLocation
   ( do
-      tok KW_Super >> period
+      tok KW_Super >> void period
       (i, loc) <- ident
       return (SuperFieldAccess (startLoc, loc) i, loc)
     )
     <|> ( do
             n <- noLoc name
-            period >> tok KW_Super >> period
+            period >> tok KW_Super >> void period
             (i, loc) <- ident
             return (ClassFieldAccess (startLoc, loc) n i, loc)
         )
@@ -1285,7 +1270,7 @@ fieldAccessNPS = do
 fieldAccessSuffix :: P (Exp Parsed -> FieldAccess Parsed, SourcePos)
 fieldAccessSuffix = do
   startLoc <- getLocation
-  period
+  void period
   (i, loc) <- ident
   return (\p -> PrimaryFieldAccess (startLoc, loc) p i, loc)
 
@@ -1329,7 +1314,7 @@ methodInvocationNPS :: P (MethodInvocation Parsed, SourcePos)
 methodInvocationNPS = do
   startLoc <- getLocation
   ( do
-      tok KW_Super >> period
+      tok KW_Super >> void period
       rts <- neoptList refTypeArgs
       i <- noLoc ident
       (as, loc) <- args
@@ -1342,7 +1327,7 @@ methodInvocationNPS = do
         )
     <|> ( do
             n <- noLoc name
-            period
+            void period
             constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
             rts <- neoptList refTypeArgs
             i <- noLoc ident
@@ -1373,7 +1358,7 @@ qualifiedMethodName = do
 methodInvocationSuffix :: P (Exp Parsed -> MethodInvocation Parsed, SourcePos)
 methodInvocationSuffix = do
   startLoc <- getLocation
-  period
+  void period
   rts <- neoptList refTypeArgs
   i <- noLoc ident
   (as, loc) <- args
@@ -1419,7 +1404,7 @@ methodInvocation =
 -}
 
 args :: P ([Argument Parsed], SourcePos)
-args = parens (noLoc (seplist exp comma))
+args = parens (sepBy (noLoc exp) comma)
 
 -- Arrays
 
@@ -1427,13 +1412,13 @@ arrayAccessNPS :: P (ArrayIndex Parsed, SourcePos)
 arrayAccessNPS = do
   startLoc <- getLocation
   n <- noLoc name
-  (e, loc) <- nelist (brackets (noLoc exp))
+  (e, loc) <- manyNonEmptyLoc (brackets (noLoc exp))
   return (ArrayIndex (startLoc, loc) (ExpName n) e, loc)
 
 arrayAccessSuffix :: P (Exp Parsed -> ArrayIndex Parsed, SourcePos)
 arrayAccessSuffix = do
   startLoc <- getLocation
-  (e, loc) <- nelist (brackets (noLoc exp))
+  (e, loc) <- manyNonEmptyLoc (brackets (noLoc exp))
   return (\ref -> ArrayIndex (startLoc, loc) ref e, loc)
 
 arrayAccess :: P (ArrayIndex Parsed, SourcePos)
@@ -1462,12 +1447,12 @@ arrayCreation = do
   t <- nonArrayType
   try
     ( do
-        ds <- nelistNoLoc emptyBrackets
+        ds <- manyNonEmpty emptyBrackets
         (ai, loc) <- arrayInit
         return (ArrayCreateInit (startLoc, loc) t (length ds) ai, loc)
     )
     <|> ( do
-            (des, desLoc) <- nelist $ try $ brackets (noLoc exp)
+            (des, desLoc) <- manyNonEmptyLoc $ try $ brackets (noLoc exp)
             ds <- many emptyBrackets
             let len = length ds
                 loc =
@@ -1549,7 +1534,7 @@ refType = do
   startLoc <- getLocation
   ( do
       pt <- primType
-      loc :| bs <- nelistNoLoc emptyBrackets
+      loc :| bs <- manyNonEmpty emptyBrackets
       return
         ( Bifunctor.first
             ($ pt)
@@ -1585,7 +1570,7 @@ nonArrayType =
 classType :: P (ClassType, SourcePos)
 classType = do
   startLoc <- getLocation
-  (cts, loc) <- seplist1 classTypeSpec period
+  (cts, loc) <- sepByNonEmptyLoc classTypeSpec period
   return (ClassType (startLoc, loc) cts, loc)
 
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
@@ -1598,13 +1583,13 @@ resultType :: P (Maybe Type)
 resultType = attrTok KW_Void Nothing <|> Just <$> ttype <?> "resultType"
 
 refTypeList :: P (NonEmpty RefType)
-refTypeList = noLoc (seplist1 refType comma)
+refTypeList = sepByNonEmpty (noLoc refType) comma
 
 ----------------------------------------------------------------------------
 -- Type parameters and arguments
 
 typeParams :: P (NonEmpty TypeParam)
-typeParams = noLoc $ angles (seplist1NoLoc typeParam comma)
+typeParams = noLoc $ angles $ sepByNonEmpty typeParam comma
 
 typeParam :: P TypeParam
 typeParam = do
@@ -1613,10 +1598,10 @@ typeParam = do
   return $ TypeParam i bs
 
 bounds :: P (NonEmpty RefType)
-bounds = tok KW_Extends >> noLoc (seplist1 refType (tok Op_And))
+bounds = tok KW_Extends >> sepByNonEmpty (noLoc refType) (tok Op_And)
 
 typeArgs :: P (NonEmpty TypeArgument, SourcePos)
-typeArgs = angles (seplist1NoLoc typeArg comma)
+typeArgs = angles $ sepByNonEmpty typeArg comma
 
 typeArg :: P TypeArgument
 typeArg =
@@ -1643,7 +1628,7 @@ refTypeArgs = noLoc $ angles refTypeList
 name :: P (Name, SourcePos)
 name = do
   startLoc <- getLocation
-  (idents, endLoc) <- seplist1 ident period
+  (idents, endLoc) <- trySepByNonEmptyLoc ident period
   return (Name (startLoc, endLoc) idents, endLoc)
 
 ident :: P (Ident, SourcePos)
@@ -1699,29 +1684,42 @@ optionBool = optionConst False True
 neoptList :: P (NonEmpty a) -> P [a]
 neoptList = optionMap [] NonEmpty.toList
 
-nelist :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
-nelist p = do
+manyNonEmptyLoc :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
+manyNonEmptyLoc p = do
   ll <- many1 p
   let l = NonEmpty.fromList (map fst ll)
       loc = snd (last ll)
   return (l, loc)
 
-nelistNoLoc :: P a -> P (NonEmpty a)
-nelistNoLoc p = NonEmpty.fromList <$> many1 p
+-- | @manyNonEmpty p@ applies the parser @p@ /one/ or more times.
+-- Returns a 'NonEmpty' list of the returned values of @p@.
+manyNonEmpty :: P a -> P (NonEmpty a)
+manyNonEmpty p = liftA2 (:|) p (many p)
 
-seplist :: P (a, SourcePos) -> P sep -> P ([a], SourcePos)
-seplist p sep =
-  Bifunctor.first NonEmpty.toList <$> seplist1 p sep
-    <|> ([],) <$> getLocation
+sepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
+sepByNonEmptyLoc p sep = sepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
 
-seplistNoLoc :: P a -> P sep -> P [a]
-seplistNoLoc p sep = optionMap [] NonEmpty.toList $ seplist1NoLoc p sep
+-- | @sepByNonEmpty p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
+-- Returns a 'NonEmpty' list of values returned by @p@.
+sepByNonEmpty :: P a -> P sep -> P (NonEmpty a)
+sepByNonEmpty p sep = liftA2 (:|) p (many $ sep >> p)
 
-seplist1 :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
-seplist1 p sep = seplist1NoLoc p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
+sepEndByLoc :: P (a, SourcePos) -> P SourcePos -> P ([a], SourcePos)
+sepEndByLoc p sep = sepEndBy1Loc <|> ([],) <$> getLocation
+  where
+    sepEndBy1Loc = do
+      (x, loc) <- p
+      do
+        loc' <- sep
+        Bifunctor.first (x :) <$> sepEndBy1Loc
+          <|> return ([x], loc')
+        <|> return ([x], loc)
 
-seplist1NoLoc :: P a -> P sep -> P (NonEmpty a)
-seplist1NoLoc p sep = liftA2 (:|) p (many $ try $ sep >> p)
+trySepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
+trySepByNonEmptyLoc p sep = trySepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
+
+trySepByNonEmpty :: P a -> P sep -> P (NonEmpty a)
+trySepByNonEmpty p sep = liftA2 (:|) p $ many $ try $ sep >> p
 
 (|>>) :: P (a, SourcePos) -> P (a -> a, SourcePos) -> P (a, SourcePos)
 start |>> suffix =
@@ -1763,22 +1761,19 @@ parens = betweenWithEndLoc OpenParen CloseParen
 
 betweenWithEndLoc :: Token -> Token -> P a -> P (a, SourcePos)
 betweenWithEndLoc open close p =
-  tok open >> (,)
-    <$> p
+  (,)
+    <$ tok open
+    <*> p
     <*> tokWithEndLoc close
 
 emptyBrackets :: P SourcePos
 emptyBrackets = tok OpenSquare >> tokWithEndLoc CloseSquare
 
 endSemi :: P a -> P (a, SourcePos)
-endSemi p =
-  (,)
-    <$> p
-    <*> getEndLoc
-    <* semiColon
+endSemi p = (,) <$> p <*> semiColon
 
-comma, colon, semiColon, period :: P ()
-comma = tok Comma
-colon = tok Op_Colon
-semiColon = tok SemiColon
-period = tok Period
+comma, colon, semiColon, period :: P SourcePos
+comma = tokWithEndLoc Comma
+colon = tokWithEndLoc Op_Colon
+semiColon = tokWithEndLoc SemiColon
+period = tokWithEndLoc Period
