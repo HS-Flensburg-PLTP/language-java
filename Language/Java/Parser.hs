@@ -1,5 +1,7 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Language.Java.Parser
@@ -45,14 +47,10 @@ module Language.Java.Parser
     typeParam,
     name,
     ident,
-    empty,
-    list,
-    list1,
+    nelist,
     seplist,
     seplist1,
-    opt,
     bopt,
-    lopt,
     comma,
     semiColon,
     period,
@@ -62,7 +60,7 @@ where
 
 import qualified Data.Bifunctor as Bifunctor
 import Data.Functor (($>), (<&>))
-import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Language.Java.Lexer (L1 (..), Token (..), lexer)
@@ -75,6 +73,7 @@ import Text.Parsec
     eof,
     getParserState,
     getState,
+    many,
     many1,
     option,
     optionMaybe,
@@ -173,9 +172,9 @@ parserWithState state p srcName src =
 
 compilationUnit :: P (CompilationUnit Parsed)
 compilationUnit = do
-  mpd <- opt packageDecl
-  ids <- list importDecl
-  tds <- list typeDecl
+  mpd <- optionMaybe packageDecl
+  ids <- many importDecl
+  tds <- many typeDecl
   eof
   return $ CompilationUnit mpd ids (catMaybes tds)
 
@@ -193,7 +192,7 @@ importDecl = do
   st <- bopt $ tok KW_Static
   n <- noLoc name
   star <- bopt (period >> tok Op_Star)
-  (_, endLoc) <- tokWithEndLoc SemiColon
+  endLoc <- tokWithEndLoc SemiColon
   return (ImportDecl (startLoc, endLoc) st n star)
 
 typeDecl :: P (Maybe (TypeDecl Parsed))
@@ -209,7 +208,7 @@ typeDecl =
 classOrInterfaceDecl :: P (TypeDecl Parsed)
 classOrInterfaceDecl = do
   startLoc <- getLocation
-  ms <- list modifier
+  ms <- many modifier
   ( do
       cd <- noLoc classDecl
       return (ClassTypeDecl (cd startLoc ms))
@@ -227,7 +226,7 @@ normalClassDecl = do
   tok KW_Class
   i <- noLoc ident
   tps <- neoptList typeParams
-  mex <- opt extends
+  mex <- optionMaybe extends
   imp <- neoptList implements
   (bod, endLoc) <- classBody
   return (\loc ms -> ClassDecl (loc, endLoc) ms i tps (fmap NonEmpty.head mex) imp bod, endLoc)
@@ -273,21 +272,21 @@ enumBody :: P (EnumBody Parsed, SourcePos)
 enumBody = braces $ do
   ecs <- seplistNoLoc enumConst comma
   optional comma
-  eds <- lopt enumBodyDecls
+  eds <- option [] enumBodyDecls
   return $ EnumBody ecs eds
 
 enumConst :: P (EnumConstant Parsed)
 enumConst = do
   i <- noLoc ident
-  as <- lopt (noLoc args)
-  mcb <- opt (noLoc classBody)
+  as <- option [] (noLoc args)
+  mcb <- optionMaybe (noLoc classBody)
   return $ EnumConstant i as mcb
 
 enumBodyDecls :: P [Decl Parsed]
 enumBodyDecls = semiColon >> classBodyStatements
 
 classBodyStatements :: P [Decl Parsed]
-classBodyStatements = catMaybes <$> list classBodyStatement
+classBodyStatements = catMaybes <$> many classBodyStatement
 
 -- Interface declarations
 
@@ -312,7 +311,7 @@ interfaceDecl = do
   return $ \loc ms -> InterfaceDecl (loc, endLoc) InterfaceNormal ms i tps exs ps bod
 
 interfaceBody :: P (InterfaceBody Parsed, SourcePos)
-interfaceBody = braces (InterfaceBody . catMaybes <$> list interfaceBodyDecl)
+interfaceBody = braces (InterfaceBody . catMaybes <$> many interfaceBodyDecl)
 
 -- Declarations
 
@@ -320,7 +319,7 @@ classBodyStatement :: P (Maybe (Decl Parsed))
 classBodyStatement =
   try
     ( do
-        _ <- list1 (tokWithEndLoc SemiColon)
+        _ <- nelistNoLoc (tokWithEndLoc SemiColon)
         return Nothing
     )
     <|> try
@@ -332,7 +331,7 @@ classBodyStatement =
       )
     <|> ( do
             loc <- getLocation
-            ms <- list modifier
+            ms <- many modifier
             dec <- memberDecl
             return (Just (MemberDecl (dec loc ms)))
         )
@@ -383,7 +382,7 @@ constrDecl :: P (Mod (MemberDecl Parsed))
 constrDecl = do
   tps <- neoptList typeParams
   i <- noLoc ident
-  fps <- lopt formalParams -- record constructors omit the argument list
+  fps <- option [] formalParams -- record constructors omit the argument list
   thr <- neoptList throws
   (bod, endLoc) <- constrBody
   return $ \loc ms -> ConstructorDecl (loc, endLoc) ms tps i fps thr bod
@@ -392,8 +391,8 @@ constrBody :: P (ConstructorBody Parsed, SourcePos)
 constrBody =
   braces
     ( do
-        mec <- opt (try explConstrInv)
-        bss <- list (noLoc blockStmt)
+        mec <- optionMaybe (try explConstrInv)
+        bss <- many (noLoc blockStmt)
         return (ConstructorBody mec bss)
     )
 
@@ -427,7 +426,7 @@ interfaceBodyDecl =
   semiColon $> Nothing
     <|> do
       loc <- getLocation
-      ms <- list modifier
+      ms <- many modifier
       imd <- interfaceMemberDecl
       return $ Just (imd loc ms)
 
@@ -451,7 +450,7 @@ absMethodDecl = do
   i <- noLoc ident
   fps <- formalParams
   thr <- neoptList throws
-  def <- opt defaultValue
+  def <- optionMaybe defaultValue
   endLoc <- getEndLoc
   semiColon
   return $ \loc ms -> MethodDecl (loc, endLoc) ms tps rt i fps thr def (MethodBody Nothing)
@@ -479,7 +478,7 @@ formalParams = noLoc $ parens $ do
 formalParam :: P (FormalParam Parsed)
 formalParam = do
   startLoc <- getLocation
-  ms <- list modifier
+  ms <- many modifier
   typ <- ttype
   var <- bopt ellipsis
   (vdi, loc) <- varDeclId
@@ -488,7 +487,7 @@ formalParam = do
 catchFormalParam :: P (CatchFormalParam Parsed)
 catchFormalParam = do
   startLoc <- getLocation
-  typs <- seplist1NoLoc ((,) <$> list modifier <*> ttype) (tok Op_Or)
+  typs <- seplist1NoLoc ((,) <$> many modifier <*> ttype) (tok Op_Or)
   (vdi, loc) <- varDeclId
   return (CatchFormalParam (startLoc, loc) typs vdi)
 
@@ -560,7 +559,7 @@ varDecl :: P (VarDecl Parsed)
 varDecl = do
   startLoc <- getLocation
   (vid, vidLoc) <- varDeclId
-  mviLoc <- opt (tok Op_Equal >> varInit)
+  mviLoc <- optionMaybe (tok Op_Equal >> varInit)
   let (mvi, endLoc) = case mviLoc of
         Nothing -> (Nothing, vidLoc)
         Just (vi, loc) -> (Just vi, loc)
@@ -570,16 +569,16 @@ varDeclId :: P (VarDeclId, SourcePos)
 varDeclId = do
   startLoc <- getLocation
   (i, noArrLoc) <- ident
-  ebs <- list emptyBrackets
+  ebs <- many emptyBrackets
   let endLoc = case ebs of
         [] -> noArrLoc
-        _ -> snd (last ebs)
-  return (foldl (\f (_, loc) -> VarDeclArray (startLoc, loc) . f) VarId ebs i, endLoc)
+        _ -> last ebs
+  return (foldl (\f loc -> VarDeclArray (startLoc, loc) . f) VarId ebs i, endLoc)
 
 localVarDecl :: P (SourcePos, [Modifier Parsed], Type, NonEmpty (VarDecl Parsed))
 localVarDecl = do
   startLoc <- getLocation
-  ms <- list modifier
+  ms <- many modifier
   typ <- ttype
   vds <- varDecls
   return (startLoc, ms, typ, vds)
@@ -593,8 +592,8 @@ arrayInit :: P (ArrayInit Parsed, SourcePos)
 arrayInit = braces $ do
   startLoc <- getLocation
   (vis, visLoc) <- seplist varInit comma
-  mtrailing <- opt (tokWithEndLoc Comma)
-  return (ArrayInit (startLoc, maybe visLoc snd mtrailing) vis)
+  mtrailing <- optionMaybe (tokWithEndLoc Comma)
+  return (ArrayInit (startLoc, fromMaybe visLoc mtrailing) vis)
 
 ----------------------------------------------------------------------------
 -- Statements
@@ -604,9 +603,9 @@ block = do
   startLoc <- getLocation
   state <- getState
   case ps_mode state of
-    -- ParseFull -> braces $ Block <$> list (noLoc blockStmt)
+    -- ParseFull -> braces $ Block <$> many (noLoc blockStmt)
     ParseFull -> do
-      (bs, loc) <- braces (list (noLoc blockStmt))
+      (bs, loc) <- braces (many (noLoc blockStmt))
       return (Block (startLoc, loc) bs, loc)
     ParseShallow -> shallowP startLoc
   where
@@ -632,7 +631,7 @@ blockStmt =
   try
     ( do
         loc <- getLocation
-        ms <- list modifier
+        ms <- many modifier
         (cd, endLoc) <- classDecl
         return (LocalClass (cd loc ms), endLoc)
     )
@@ -676,15 +675,15 @@ stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
           parens $
             try
               ( do
-                  fi <- opt forInit
+                  fi <- optionMaybe forInit
                   semiColon
-                  e <- opt (noLoc exp)
+                  e <- optionMaybe (noLoc exp)
                   semiColon
                   fu <- forUp
                   return (\loc -> BasicFor (startLoc, loc) fi e fu)
               )
               <|> ( do
-                      ms <- list modifier
+                      ms <- many modifier
                       t <- ttype
                       i <- noLoc ident
                       colon
@@ -725,15 +724,15 @@ stmtNSI = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
           parens $
             try
               ( do
-                  fi <- opt forInit
+                  fi <- optionMaybe forInit
                   semiColon
-                  e <- opt (noLoc exp)
+                  e <- optionMaybe (noLoc exp)
                   semiColon
                   fu <- forUp
                   return (\loc -> BasicFor (startLoc, loc) fi e fu)
               )
               <|> ( do
-                      ms <- list modifier
+                      ms <- many modifier
                       t <- ttype
                       i <- noLoc ident
                       colon
@@ -754,7 +753,7 @@ stmtNoTrail =
   -- empty statement
   ( do
       startLoc <- getLocation
-      (_, loc) <- tokWithEndLoc SemiColon
+      loc <- tokWithEndLoc SemiColon
       return (Empty (startLoc, loc), loc)
   )
     <|>
@@ -766,8 +765,8 @@ stmtNoTrail =
         startLoc <- getLocation
         tok KW_Assert
         e <- noLoc exp
-        me2 <- opt $ colon >> noLoc exp
-        (_, loc) <- tokWithEndLoc SemiColon
+        me2 <- optionMaybe $ colon >> noLoc exp
+        loc <- tokWithEndLoc SemiColon
         return (Assert (startLoc, loc) e me2, loc)
     )
     <|>
@@ -787,7 +786,7 @@ stmtNoTrail =
         s <- noLoc stmt
         tok KW_While
         e <- noLoc $ parens (noLoc exp)
-        (_, endLoc) <- tokWithEndLoc SemiColon
+        endLoc <- tokWithEndLoc SemiColon
         return (Do (startLoc, endLoc) s e, endLoc)
     )
     <|>
@@ -795,8 +794,8 @@ stmtNoTrail =
     ( do
         startLoc <- getLocation
         tok KW_Break
-        mi <- opt (noLoc ident)
-        (_, endLoc) <- tokWithEndLoc SemiColon
+        mi <- optionMaybe (noLoc ident)
+        endLoc <- tokWithEndLoc SemiColon
         return (Break (startLoc, endLoc) mi, endLoc)
     )
     <|>
@@ -804,8 +803,8 @@ stmtNoTrail =
     ( do
         startLoc <- getLocation
         tok KW_Continue
-        mi <- opt (noLoc ident)
-        (_, loc) <- tokWithEndLoc SemiColon
+        mi <- optionMaybe (noLoc ident)
+        loc <- tokWithEndLoc SemiColon
         return (Continue (startLoc, loc) mi, loc)
     )
     <|>
@@ -813,8 +812,8 @@ stmtNoTrail =
     ( do
         startLoc <- getLocation
         tok KW_Return
-        me <- opt (noLoc exp)
-        (_, endLoc) <- tokWithEndLoc SemiColon
+        me <- optionMaybe (noLoc exp)
+        endLoc <- tokWithEndLoc SemiColon
         return (Return (startLoc, endLoc) me, endLoc)
     )
     <|>
@@ -832,7 +831,7 @@ stmtNoTrail =
         startLoc <- getLocation
         tok KW_Throw
         e <- noLoc exp
-        (_, loc) <- tokWithEndLoc SemiColon
+        loc <- tokWithEndLoc SemiColon
         return (Throw (startLoc, loc) e, loc)
     )
     <|>
@@ -842,8 +841,8 @@ stmtNoTrail =
         tok KW_Try
         resources <- tryResourceList
         (b, blockEndLoc) <- block
-        cs <- list catch
-        mfLoc <- opt (tok KW_Finally >> block)
+        cs <- many catch
+        mfLoc <- optionMaybe (tok KW_Finally >> block)
         -- TODO: here we should check that there exists at
         -- least one catch or finally clause
         let (mf, endLoc) = case (mfLoc, cs) of
@@ -884,17 +883,17 @@ switchBlock :: P ((SwitchStyle, [SwitchBlock Parsed]), SourcePos)
 switchBlock = braces (try old <|> new)
   where
     old = do
-      x <- list switchStmtOld
+      x <- many switchStmtOld
       return (SwitchOldStyle, x)
     new = do
-      x <- list switchStmtNew
+      x <- many switchStmtNew
       return (SwitchNewStyle, x)
 
 switchStmtOld :: P (SwitchBlock Parsed)
 switchStmtOld = do
   startLoc <- getLocation
   (lbl, lblLoc) <- switchLabelOld
-  bswithLocs <- list blockStmt
+  bswithLocs <- many blockStmt
   let bss = map fst bswithLocs
       loc = case bswithLocs of
         [] -> lblLoc
@@ -914,7 +913,7 @@ switchStmtNew :: P (SwitchBlock Parsed)
 switchStmtNew = do
   startLoc <- getLocation
   lbl <- switchLabelNew
-  (bss, loc) <- braces (list (noLoc blockStmt)) <|> blockStmt >>= \s -> return ([fst s], snd s)
+  (bss, loc) <- braces (many (noLoc blockStmt)) <|> blockStmt >>= \s -> return ([fst s], snd s)
   return (SwitchBlock (startLoc, loc) lbl bss)
 
 switchLabelNew :: P (SwitchLabel Parsed)
@@ -939,7 +938,7 @@ switchExp = do
     switchExpBodyBranch = do
       lbl <- switchLabelNew
       body <-
-        (SwitchExpBranchBlock <$> noLoc (braces (list (noLoc blockStmt))))
+        (SwitchExpBranchBlock <$> noLoc (braces (many (noLoc blockStmt))))
           <|> (SwitchExpBranchBlock <$> try (blockStmt >>= \s -> return [fst s]))
           <|> (SwitchExpBranchExp <$> branchExp)
       return (SwitchExpBranch lbl body)
@@ -960,11 +959,11 @@ catch = do
 tryResourceList :: P [TryResource Parsed]
 tryResourceList = do
   l <-
-    opt
+    optionMaybe
       ( noLoc
           ( parens $ do
               l <- seplistNoLoc tryResource semiColon
-              _ <- opt semiColon
+              _ <- optionMaybe semiColon
               return l
           )
       )
@@ -979,7 +978,7 @@ tryResourceList = do
 
 resourceDecl :: P (ResourceDecl Parsed)
 resourceDecl = do
-  ms <- list modifier
+  ms <- many modifier
   typ <- ttype
   vid <- noLoc varDeclId
   tok Op_Equal
@@ -1009,7 +1008,7 @@ postIncDec :: P (Exp Parsed)
 postIncDec = do
   startLoc <- getLocation
   e <- noLoc postfixExpNES
-  ops <- noLoc $ list1 postfixOp
+  ops <- noLoc $ nelist postfixOp
   return (foldl (\a s -> s startLoc a) e ops)
 
 assignment :: P (Exp Parsed, SourcePos)
@@ -1082,11 +1081,11 @@ relExp = do
           <|> attrTok Op_GThanE GThanE
       )
   fromMaybe (e, endLoc)
-    <$> opt
+    <$> optionMaybe
       ( do
           tok KW_Instanceof
           (t, refLoc) <- refType
-          mNameLoc <- opt name
+          mNameLoc <- optionMaybe name
           let (mName, loc) =
                 case mNameLoc of
                   Just (n, l) -> (Just n, l)
@@ -1152,7 +1151,7 @@ primaryNoNewArrayNPS = do
   startLoc <- getLocation
   Bifunctor.first Lit <$> literal
     <|> ( do
-            (_, loc) <- tokWithEndLoc KW_This
+            loc <- tokWithEndLoc KW_This
             return (This (startLoc, loc), loc)
         )
     <|> parens (noLoc exp)
@@ -1162,14 +1161,14 @@ primaryNoNewArrayNPS = do
       ( do
           rt <- resultType
           _ <- period
-          (_, loc) <- tokWithEndLoc KW_Class
+          loc <- tokWithEndLoc KW_Class
           return (ClassLit (startLoc, loc) rt, loc)
       )
     <|> try
       ( do
           n <- noLoc name
           _ <- period
-          (_, loc) <- tokWithEndLoc KW_This
+          loc <- tokWithEndLoc KW_This
           return (ThisClass (startLoc, loc) n, loc)
       )
     <|> try instanceCreationNPS
@@ -1192,7 +1191,7 @@ instanceCreationNPS =
     tas <- neoptList (noLoc typeArgs)
     tds <- typeDeclSpecifier
     (as, argsLoc) <- args
-    mcbLoc <- opt classBody
+    mcbLoc <- optionMaybe classBody
     let (mcb, loc) =
           case mcbLoc of
             Just (cb, l) -> (Just cb, l)
@@ -1227,7 +1226,7 @@ instanceCreationSuffix =
     tas <- neoptList (noLoc typeArgs)
     i <- noLoc ident
     (as, argsLoc) <- args
-    mcbLoc <- opt classBody
+    mcbLoc <- optionMaybe classBody
     let (mcb, loc) =
           case mcbLoc of
             Just (cb, l) -> (Just cb, l)
@@ -1241,7 +1240,7 @@ instanceCreation =
     )
     <|> do
       p <- noLoc primaryNPS
-      ss <- list (noLoc primarySuffix)
+      ss <- many (noLoc primarySuffix)
       let icp = foldl (\a s -> s a) p ss
       case icp of
         QualInstanceCreation {} -> return icp
@@ -1280,17 +1279,17 @@ methodRef = do
 {-
 instanceCreation =
     (do tok KW_New
-        tas <- lopt typeArgs
+        tas <- option [] typeArgs
         ct  <- classType
         as  <- args
-        mcb <- opt classBody
+        mcb <- optionMaybe classBody
         return $ InstanceCreation tas ct as mcb) <|>
     (do p   <- primary
         period >> tok KW_New
-        tas <- lopt typeArgs
+        tas <- option [] typeArgs
         i   <- ident
         as  <- args
-        mcb <- opt classBody
+        mcb <- optionMaybe classBody
         return $ QualInstanceCreation p tas i as mcb)
 -}
 
@@ -1321,7 +1320,7 @@ fieldAccess =
   try (noLoc fieldAccessNPS)
     <|> do
       p <- noLoc primaryNPS
-      ss <- list (noLoc primarySuffix)
+      ss <- many (noLoc primarySuffix)
       let fap = foldl (\a s -> s a) p ss
       case fap of
         FieldAccess fa -> return fa
@@ -1370,7 +1369,7 @@ methodInvocationNPS = do
     <|> ( do
             n <- noLoc name
             period
-            msp <- opt (tok KW_Super >> period)
+            msp <- optionMaybe (tok KW_Super >> period)
             rts <- neoptList refTypeArgs
             i <- noLoc ident
             (as, loc) <- args
@@ -1412,7 +1411,7 @@ methodInvocationExp =
   try
     ( do
         p <- noLoc primaryNPS
-        ss <- list (noLoc primarySuffix)
+        ss <- many (noLoc primarySuffix)
         let mip = foldl (\a s -> s a) p ss
         case mip of
           MethodInv _ -> return mip
@@ -1424,13 +1423,13 @@ methodInvocationExp =
 methodInvocation :: P MethodInvocation
 methodInvocation =
     (do tok KW_Super >> period
-        rts <- lopt refTypeArgs
+        rts <- option [] refTypeArgs
         i   <- ident
         as  <- args
         return $ SuperMethodCall rts i as) <|>
     (do p <- primary
         period
-        rts <- lopt refTypeArgs
+        rts <- option [] refTypeArgs
         i   <- ident
         as  <- args
         return $ PrimaryMethodCall p rts i as) <|>
@@ -1438,8 +1437,8 @@ methodInvocation =
         f <- (do as <- args
                  return $ \n -> MethodCall n as) <|>
              (period >> do
-                msp <- opt (tok KW_Super >> period)
-                rts <- lopt refTypeArgs
+                msp <- optionMaybe (tok KW_Super >> period)
+                rts <- option [] refTypeArgs
                 i   <- ident
                 as  <- args
                 let mc = maybe TypeMethodCall (const ClassMethodCall) msp
@@ -1456,13 +1455,13 @@ arrayAccessNPS :: P (ArrayIndex Parsed, SourcePos)
 arrayAccessNPS = do
   startLoc <- getLocation
   n <- noLoc name
-  (e, loc) <- list1 (brackets (noLoc exp))
+  (e, loc) <- nelist (brackets (noLoc exp))
   return (ArrayIndex (startLoc, loc) (ExpName n) e, loc)
 
 arrayAccessSuffix :: P (Exp Parsed -> ArrayIndex Parsed, SourcePos)
 arrayAccessSuffix = do
   startLoc <- getLocation
-  (e, loc) <- list1 (brackets (noLoc exp))
+  (e, loc) <- nelist (brackets (noLoc exp))
   return (\ref -> ArrayIndex (startLoc, loc) ref e, loc)
 
 arrayAccess :: P (ArrayIndex Parsed, SourcePos)
@@ -1491,18 +1490,18 @@ arrayCreation = do
   t <- nonArrayType
   try
     ( do
-        ds <- noLoc $ list1 emptyBrackets
+        ds <- nelistNoLoc emptyBrackets
         (ai, loc) <- arrayInit
         return (ArrayCreateInit (startLoc, loc) t (length ds) ai, loc)
     )
     <|> ( do
-            (des, desLoc) <- list1 $ try $ brackets (noLoc exp)
-            ds <- list emptyBrackets
+            (des, desLoc) <- nelist $ try $ brackets (noLoc exp)
+            ds <- many emptyBrackets
             let len = length ds
                 loc =
                   if len < 1
                     then desLoc
-                    else snd (last ds)
+                    else last ds
             return (ArrayCreate (startLoc, loc) t des len, loc)
         )
 
@@ -1578,10 +1577,10 @@ refType = do
   startLoc <- getLocation
   ( do
       pt <- primType
-      (_, loc) :| bs <- list1NoLoc emptyBrackets
+      loc :| bs <- nelistNoLoc emptyBrackets
       return
         ( Bifunctor.first
-            (\a -> a pt)
+            ($ pt)
             ( foldl
                 (f startLoc)
                 (ArrayType (startLoc, loc) . PrimType, loc)
@@ -1591,10 +1590,10 @@ refType = do
     )
     <|> ( do
             (ct, ctLoc) <- classType
-            bs <- list emptyBrackets
+            bs <- many emptyBrackets
             return
               ( Bifunctor.first
-                  (\a -> a ct)
+                  ($ ct)
                   ( foldl
                       (f startLoc)
                       (ClassRefType, ctLoc)
@@ -1604,7 +1603,7 @@ refType = do
         )
     <?> "refType"
   where
-    f s (c, _) (_, loc) = (ArrayType (s, loc) . RefType . c, loc)
+    f s (c, _) loc = (ArrayType (s, loc) . RefType . c, loc)
 
 nonArrayType :: P Type
 nonArrayType =
@@ -1620,7 +1619,7 @@ classType = do
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
 classTypeSpec = do
   (i, iLoc) <- ident
-  mtas <- opt typeArgs
+  mtas <- optionMaybe typeArgs
   let (tas, loc) = maybe ([], iLoc) (Bifunctor.first NonEmpty.toList) mtas
   return ((i, tas), loc)
 
@@ -1652,7 +1651,7 @@ typeArg :: P TypeArgument
 typeArg =
   tok Op_Query
     >> Wildcard
-    <$> opt wildcardBound
+    <$> optionMaybe wildcardBound
     <|> ActualType <$> noLoc refType
 
 wildcardBound :: P WildcardBound
@@ -1699,82 +1698,41 @@ attrFixedIdent fixed result = do
 
 ------------------------------------------------------------
 
-empty :: P ()
-empty = return ()
-
-opt :: P a -> P (Maybe a)
-opt = optionMaybe
-
 bopt :: P a -> P Bool
-bopt p = opt p >>= \ma -> return $ isJust ma
+bopt p = isJust <$> optionMaybe p
 
 neoptList :: P (NonEmpty a) -> P [a]
-neoptList p = do
-  mas <- opt p
-  case mas of
-    Nothing -> return []
-    Just as -> return (NonEmpty.toList as)
+neoptList p = maybe [] NonEmpty.toList <$> optionMaybe p
 
-lopt :: P [a] -> P [a]
-lopt p = do
-  mas <- opt p
-  case mas of
-    Nothing -> return []
-    Just as -> return as
-
-list :: P a -> P [a]
-list = option [] . many1
-
-list1 :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
-list1 p = do
+nelist :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
+nelist p = do
   ll <- many1 p
   let l = NonEmpty.fromList (map fst ll)
       loc = snd (last ll)
   return (l, loc)
 
-list1NoLoc :: P a -> P (NonEmpty a)
-list1NoLoc p =
-  NonEmpty.fromList <$> many1 p
+nelistNoLoc :: P a -> P (NonEmpty a)
+nelistNoLoc p = NonEmpty.fromList <$> many1 p
 
 seplist :: P (a, SourcePos) -> P sep -> P ([a], SourcePos)
--- seplist = sepBy
-seplist p sep = do
-  startLoc <- getLocation
-  option ([], startLoc) (Bifunctor.first NonEmpty.toList <$> seplist1 p sep)
+seplist p sep =
+  Bifunctor.first NonEmpty.toList <$> seplist1 p sep
+    <|> ([],) <$> getLocation
 
 seplistNoLoc :: P a -> P sep -> P [a]
--- seplist = sepBy
 seplistNoLoc p sep = option [] $ NonEmpty.toList <$> seplist1NoLoc p sep
 
 seplist1 :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
--- seplist1 = sepBy1
-seplist1 p sep =
-  p >>= \(a, loc) ->
-    try
-      ( do
-          _ <- sep
-          (as, l) <- seplist1 p sep
-          return (a <| as, l)
-      )
-      <|> return (a :| [], loc)
+seplist1 p sep = seplist1NoLoc p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
 
 seplist1NoLoc :: P a -> P sep -> P (NonEmpty a)
--- seplist1 = sepBy1
-seplist1NoLoc p sep =
-  p >>= \a ->
-    try
-      ( do
-          _ <- sep
-          as <- seplist1NoLoc p sep
-          return (a <| as)
-      )
-      <|> return (a :| [])
+seplist1NoLoc p sep = liftA2 (:|) p (many $ try $ sep >> p)
 
 (|>>) :: P (a, SourcePos) -> P (a -> a, SourcePos) -> P (a, SourcePos)
-start |>> suffix = do
-  x <- start
-  ss <- list suffix
-  return (foldl (\(a, _) (s, loc) -> (s a, loc)) x ss)
+start |>> suffix =
+  foldl (\(a, _) (s, loc) -> (s a, loc))
+    <$> start
+    <*> many suffix
 
 ------------------------------------------------------------
 
@@ -1785,25 +1743,20 @@ javaToken test = token showT posT testT
     posT (L1 p _ _) = pos2sourcePos p
     testT (L1 _ _ t) = test t
 
-tok, matchToken :: Token -> P ()
-tok = matchToken
-matchToken t = javaToken (\r -> if r == t then Just () else Nothing)
+tok :: Token -> P ()
+tok t = javaToken \r -> if r == t then Just () else Nothing
 
 attrTok :: Token -> b -> P b
 attrTok t constr = tok t $> constr
 
 attrTokWithEndLoc :: Token -> b -> P (b, SourcePos)
-attrTokWithEndLoc t constr =
-  fmap (\(_, endLoc) -> (constr, endLoc)) (tokWithEndLoc t)
+attrTokWithEndLoc t constr = (constr,) <$> tokWithEndLoc t
 
-tokWithEndLoc :: Token -> P ((), SourcePos)
-tokWithEndLoc t = do
-  endLoc <- getEndLoc
-  x <- tok t
-  return (x, endLoc)
+tokWithEndLoc :: Token -> P SourcePos
+tokWithEndLoc t = getEndLoc <* tok t
 
 pos2sourcePos :: (Int, Int) -> SourcePos
-pos2sourcePos (l, c) = newPos "" l c
+pos2sourcePos = uncurry (newPos "")
 
 type Mod a = SourcePos -> [Modifier Parsed] -> a
 
@@ -1814,21 +1767,20 @@ brackets = betweenWithEndLoc OpenSquare CloseSquare
 parens = betweenWithEndLoc OpenParen CloseParen
 
 betweenWithEndLoc :: Token -> Token -> P a -> P (a, SourcePos)
-betweenWithEndLoc open close p = do
-  _ <- tok open
-  x <- p
-  (_, endLoc) <- tokWithEndLoc close
-  return (x, endLoc)
+betweenWithEndLoc open close p =
+  tok open >> (,)
+    <$> p
+    <*> tokWithEndLoc close
 
-emptyBrackets :: P ((), SourcePos)
-emptyBrackets = brackets (pure ())
+emptyBrackets :: P SourcePos
+emptyBrackets = tok OpenSquare >> tokWithEndLoc CloseSquare
 
 endSemi :: P a -> P (a, SourcePos)
-endSemi p = do
-  a <- p
-  endLoc <- getEndLoc
-  semiColon
-  return (a, endLoc)
+endSemi p =
+  (,)
+    <$> p
+    <*> getEndLoc
+    <* semiColon
 
 comma, colon, semiColon, period :: P ()
 comma = tok Comma
