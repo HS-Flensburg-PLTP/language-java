@@ -65,6 +65,7 @@ where
 
 import qualified Data.Bifunctor as Bifunctor
 import Data.Foldable (Foldable (foldl'))
+import Data.Function ((&))
 import Data.Functor (void, ($>), (<&>))
 import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -1200,7 +1201,7 @@ instanceCreation =
     <|> do
       p <- noLoc primaryNPS
       ss <- many (noLoc primarySuffix)
-      let icp = foldl' (\a s -> s a) p ss
+      let icp = foldl' (&) p ss
       case icp of
         QualInstanceCreation {} -> return icp
         _ -> fail ""
@@ -1280,7 +1281,7 @@ fieldAccess =
     <|> do
       p <- noLoc primaryNPS
       ss <- many (noLoc primarySuffix)
-      let fap = foldl' (\a s -> s a) p ss
+      let fap = foldl' (&) p ss
       case fap of
         FieldAccess fa -> return fa
         _ -> fail ""
@@ -1370,7 +1371,7 @@ methodInvocationExp =
     ( do
         p <- noLoc primaryNPS
         ss <- many (noLoc primarySuffix)
-        let mip = foldl' (\a s -> s a) p ss
+        let mip = foldl' (&) p ss
         case mip of
           MethodInv _ -> return mip
           _ -> fail ""
