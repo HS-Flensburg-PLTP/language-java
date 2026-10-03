@@ -64,7 +64,7 @@ module Language.Java.Parser
 where
 
 import qualified Data.Bifunctor as Bifunctor
-import Data.Functor (($>), (<&>))
+import Data.Foldable (Foldable (foldl'))
 import Data.Functor (void, ($>), (<&>))
 import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -567,7 +567,7 @@ varDeclId = do
   let endLoc = case ebs of
         [] -> noArrLoc
         _ -> last ebs
-  return (foldl (\f loc -> VarDeclArray (startLoc, loc) . f) VarId ebs i, endLoc)
+  return (foldl' (\f loc -> VarDeclArray (startLoc, loc) . f) VarId ebs i, endLoc)
 
 localVarDecl :: P (SourcePos, [Modifier Parsed], Type, NonEmpty (VarDecl Parsed))
 localVarDecl = do
@@ -983,7 +983,7 @@ postIncDec = do
   startLoc <- getLocation
   e <- noLoc postfixExpNES
   ops <- manyNonEmpty (noLoc postfixOp)
-  return (foldl (\a s -> s startLoc a) e ops)
+  return (foldl' (\a s -> s startLoc a) e ops)
 
 assignment :: P (Exp Parsed, SourcePos)
 assignment = do
@@ -1200,7 +1200,7 @@ instanceCreation =
     <|> do
       p <- noLoc primaryNPS
       ss <- many (noLoc primarySuffix)
-      let icp = foldl (\a s -> s a) p ss
+      let icp = foldl' (\a s -> s a) p ss
       case icp of
         QualInstanceCreation {} -> return icp
         _ -> fail ""
@@ -1280,7 +1280,7 @@ fieldAccess =
     <|> do
       p <- noLoc primaryNPS
       ss <- many (noLoc primarySuffix)
-      let fap = foldl (\a s -> s a) p ss
+      let fap = foldl' (\a s -> s a) p ss
       case fap of
         FieldAccess fa -> return fa
         _ -> fail ""
@@ -1370,7 +1370,7 @@ methodInvocationExp =
     ( do
         p <- noLoc primaryNPS
         ss <- many (noLoc primarySuffix)
-        let mip = foldl (\a s -> s a) p ss
+        let mip = foldl' (\a s -> s a) p ss
         case mip of
           MethodInv _ -> return mip
           _ -> fail ""
@@ -1538,7 +1538,7 @@ refType = do
       return
         ( Bifunctor.first
             ($ pt)
-            ( foldl
+            ( foldl'
                 (f startLoc)
                 (ArrayType (startLoc, loc) . PrimType, loc)
                 bs
@@ -1551,7 +1551,7 @@ refType = do
             return
               ( Bifunctor.first
                   ($ ct)
-                  ( foldl
+                  ( foldl'
                       (f startLoc)
                       (ClassRefType, ctLoc)
                       bs
@@ -1723,7 +1723,7 @@ trySepByNonEmpty p sep = liftA2 (:|) p $ many $ try $ sep >> p
 
 (|>>) :: P (a, SourcePos) -> P (a -> a, SourcePos) -> P (a, SourcePos)
 start |>> suffix =
-  foldl (\(a, _) (s, loc) -> (s a, loc))
+  foldl' (\(a, _) (s, loc) -> (s a, loc))
     <$> start
     <*> many suffix
 
