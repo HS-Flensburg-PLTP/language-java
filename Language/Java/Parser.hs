@@ -54,11 +54,13 @@ module Language.Java.Parser
     semiColon,
     period,
     colon,
+    optionMaybeLoc,
   )
 where
 
 import qualified Data.Bifunctor as Bifunctor
 import Data.Functor (($>), (<&>))
+import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Maybe (catMaybes, fromMaybe, isJust)
@@ -550,10 +552,7 @@ varDecl :: P (VarDecl Parsed)
 varDecl = do
   startLoc <- getLocation
   (vid, vidLoc) <- varDeclId
-  mviLoc <- optionMaybe (tok Op_Equal >> varInit)
-  let (mvi, endLoc) = case mviLoc of
-        Nothing -> (Nothing, vidLoc)
-        Just (vi, loc) -> (Just vi, loc)
+  (mvi, endLoc) <- optionMaybeLoc vidLoc (tok Op_Equal >> varInit)
   return (VarDecl (startLoc, endLoc) vid mvi)
 
 varDeclId :: P (VarDeclId, SourcePos)
@@ -833,13 +832,10 @@ stmtNoTrail =
         resources <- tryResourceList
         (b, blockEndLoc) <- block
         cs <- many catch
-        mfLoc <- optionMaybe (tok KW_Finally >> block)
+        let cEndLoc = maybe blockEndLoc (snd . snd) (unsnoc cs)
+        (mf, endLoc) <- optionMaybeLoc cEndLoc (tok KW_Finally >> block)
         -- TODO: here we should check that there exists at
         -- least one catch or finally clause
-        let (mf, endLoc) = case (mfLoc, cs) of
-              (Nothing, []) -> (Nothing, blockEndLoc)
-              (Nothing, c) -> (Nothing, snd (last c))
-              (Just (fb, l), _) -> (Just fb, l)
         return
           ( Try (startLoc, endLoc) resources b (map fst cs) mf,
             endLoc
@@ -1076,11 +1072,7 @@ relExp = do
       ( do
           tok KW_Instanceof
           (t, refLoc) <- refType
-          mNameLoc <- optionMaybe name
-          let (mName, loc) =
-                case mNameLoc of
-                  Just (n, l) -> (Just n, l)
-                  Nothing -> (Nothing, refLoc)
+          (mName, loc) <- optionMaybeLoc refLoc name
           return (InstanceOf (startLoc, loc) e t mName, loc)
       )
 
@@ -1182,11 +1174,7 @@ instanceCreationNPS =
     tas <- neoptList (noLoc typeArgs)
     tds <- typeDeclSpecifier
     (as, argsLoc) <- args
-    mcbLoc <- optionMaybe classBody
-    let (mcb, loc) =
-          case mcbLoc of
-            Just (cb, l) -> (Just cb, l)
-            Nothing -> (Nothing, argsLoc)
+    (mcb, loc) <- optionMaybeLoc argsLoc classBody
     return (InstanceCreation (startLoc, loc) tas tds as mcb, loc)
 
 typeDeclSpecifier :: P TypeDeclSpecifier
@@ -1217,11 +1205,7 @@ instanceCreationSuffix =
     tas <- neoptList (noLoc typeArgs)
     i <- noLoc ident
     (as, argsLoc) <- args
-    mcbLoc <- optionMaybe classBody
-    let (mcb, loc) =
-          case mcbLoc of
-            Just (cb, l) -> (Just cb, l)
-            Nothing -> (Nothing, argsLoc)
+    (mcb, loc) <- optionMaybeLoc argsLoc classBody
     return (\p -> QualInstanceCreation (startLoc, loc) p tas i as mcb, loc)
 
 instanceCreation :: P (Exp Parsed)
@@ -1610,8 +1594,7 @@ classType = do
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
 classTypeSpec = do
   (i, iLoc) <- ident
-  mtas <- optionMaybe typeArgs
-  let (tas, loc) = maybe ([], iLoc) (Bifunctor.first NonEmpty.toList) mtas
+  (tas, loc) <- option ([], iLoc) (Bifunctor.first NonEmpty.toList <$> typeArgs)
   return ((i, tas), loc)
 
 resultType :: P (Maybe Type)
@@ -1688,6 +1671,12 @@ attrFixedIdent fixed result = do
   return (a, loc)
 
 ------------------------------------------------------------
+
+-- | @optionMaybeLoc loc p@ tries to apply parser @p@.  If @p@ fails without
+-- consuming input, it returns @('Nothing', loc)@, otherwise it returns
+-- 'Data.Bifunctor.first' 'Just' the value returned by @p@.
+optionMaybeLoc :: SourcePos -> P (a, SourcePos) -> P (Maybe a, SourcePos)
+optionMaybeLoc loc p = option (Nothing, loc) (Bifunctor.first Just <$> p)
 
 bopt :: P a -> P Bool
 bopt p = isJust <$> optionMaybe p
