@@ -63,6 +63,7 @@ module Language.Java.Parser
   )
 where
 
+import Control.Monad (guard)
 import qualified Data.Bifunctor as Bifunctor
 import Data.Foldable (Foldable (foldl'))
 import Data.Function ((&))
@@ -441,14 +442,11 @@ throws = tok KW_Throws >> refTypeList
 formalParams :: P [FormalParam Parsed]
 formalParams = noLoc $ parens do
   fps <- sepBy formalParam comma
-  if validateFPs fps
-    then return fps
-    else fail "Only the last formal parameter may be of variable arity"
+  fps <$ guard (null fps || all nonVarParam (init fps))
+    <|> fail "Only the last formal parameter may be of variable arity"
   where
-    validateFPs :: [FormalParam Parsed] -> Bool
-    validateFPs [] = True
-    validateFPs [_] = True
-    validateFPs (FormalParam _ _ _ b _ : _) = not b
+    nonVarParam :: FormalParam Parsed -> Bool
+    nonVarParam (FormalParam _ _ _ b _) = not b
 
 formalParam :: P (FormalParam Parsed)
 formalParam = do
