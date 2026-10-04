@@ -58,7 +58,7 @@ module Language.Java.Parser
   )
 where
 
-import Control.Monad (guard)
+import Control.Monad (guard, when)
 import qualified Data.Bifunctor as Bifunctor
 import Data.Foldable (Foldable (foldl'))
 import Data.Function ((&))
@@ -787,8 +787,8 @@ stmtNoTrail =
         cs <- many catch
         let cEndLoc = maybe blockEndLoc (snd . snd) (unsnoc cs)
         (mf, endLoc) <- optionMaybeLoc cEndLoc (tok KW_Finally >> block)
-        -- TODO: here we should check that there exists at
-        -- least one catch or finally clause
+        when (null resources && null cs && null mf) $
+          fail "try needs at least one catch or finally clause"
         return
           ( Try (startLoc, endLoc) resources b (map fst cs) mf,
             endLoc
