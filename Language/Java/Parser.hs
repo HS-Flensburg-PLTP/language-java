@@ -1043,7 +1043,6 @@ unaryExp =
 
 postfixExpNES :: P (Exp Parsed, SourcePos)
 postfixExpNES =
-  -- try postIncDec <|>
   try primary
     <|> Bifunctor.first ExpName <$> name
 
@@ -1059,9 +1058,6 @@ primaryNPS :: P (Exp Parsed, SourcePos)
 primaryNPS =
   try arrayCreation
     <|> primaryNoNewArrayNPS
-
--- unused
--- primaryNoNewArray = startSuff primaryNoNewArrayNPS primarySuffix
 
 primaryNoNewArrayNPS :: P (Exp Parsed, SourcePos)
 primaryNoNewArrayNPS = do
@@ -1172,23 +1168,6 @@ methodRef = do
       <|> Bifunctor.first MethodRefIdent <$> ident
   return (MethodRef (startLoc, loc) n mrt, loc)
 
-{-
-instanceCreation =
-    (do tok KW_New
-        tas <- option [] typeArgs
-        ct  <- classType
-        as  <- args
-        mcb <- optionMaybe classBody
-        return $ InstanceCreation tas ct as mcb) <|>
-    (do p   <- primary
-        period >> tok KW_New
-        tas <- option [] typeArgs
-        i   <- ident
-        as  <- args
-        mcb <- optionMaybe classBody
-        return $ QualInstanceCreation p tas i as mcb)
--}
-
 fieldAccessNPS :: P (FieldAccess Parsed, SourcePos)
 fieldAccessNPS = do
   startLoc <- getLocation
@@ -1218,31 +1197,6 @@ fieldAccess =
         >>= \case
           FieldAccess fa -> return fa
           _ -> fail ""
-
-{-
-fieldAccess :: P FieldAccess
-fieldAccess = try fieldAccessNPS <|> do
-    p <- primary
-    fs <- fieldAccessSuffix
-    return (fs p)
--}
-
-{-
-fieldAccess :: P FieldAccess
-fieldAccess =
-    (do tok KW_Super >> period
-        i <- ident
-        return $ SuperFieldAccess i) <|>
-    (try $ do
-        n <- name
-        period >> tok KW_Super >> period
-        i <- ident
-        return $ ClassFieldAccess n i) <|>
-    (do p <- primary
-        period
-        i <- ident
-        return $ PrimaryFieldAccess p i)
--}
 
 methodInvocationNPS :: P (MethodInvocation Parsed, SourcePos)
 methodInvocationNPS = do
@@ -1303,32 +1257,6 @@ methodInvocationExp =
         _ -> fail ""
     <|> MethodInv <$> noLoc methodInvocationNPS
 
-{-
-methodInvocation :: P MethodInvocation
-methodInvocation =
-    (do tok KW_Super >> period
-        rts <- option [] refTypeArgs
-        i   <- ident
-        as  <- args
-        return $ SuperMethodCall rts i as) <|>
-    (do p <- primary
-        period
-        rts <- option [] refTypeArgs
-        i   <- ident
-        as  <- args
-        return $ PrimaryMethodCall p rts i as) <|>
-    (do n <- name
-        f <- (do as <- args
-                 return $ \n -> MethodCall n as) <|>
-             (period >> do
-                mc <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
-                rts <- option [] refTypeArgs
-                i   <- ident
-                as  <- args
-                return $ \n -> mc n rts i as)
-        return $ f n)
--}
-
 args :: P ([Argument Parsed], SourcePos)
 args = parens (sepBy (noLoc exp) comma)
 
@@ -1353,17 +1281,6 @@ arrayAccess =
     <|> primaryNoNewArrayNPS |>> primarySuffix >>= \case
       (ArrayAccess ain, loc) -> return (ain, loc)
       _ -> fail ""
-
-{-
-arrayAccess :: P (Exp, Exp)
-arrayAccess = do
-    ref <- arrayRef
-    e   <- brackets exp
-    return (ref, e)
-
-arrayRef :: P Exp
-arrayRef = ExpName <$> name <|> primaryNoNewArray
--}
 
 arrayCreation :: P (Exp Parsed, SourcePos)
 arrayCreation = do
