@@ -195,7 +195,7 @@ importDecl = do
   st <- optionBool $ tok KW_Static
   n <- noLoc name
   star <- optionBool (period >> tok Op_Star)
-  endLoc <- tokWithEndLoc SemiColon
+  endLoc <- semiColon
   return (ImportDecl (startLoc, endLoc) st n star)
 
 typeDecl :: P (Maybe (TypeDecl Parsed))
@@ -316,7 +316,7 @@ interfaceBody = braces (InterfaceBody . catMaybes <$> many interfaceBodyDecl)
 
 classBodyStatement :: P (Maybe (Decl Parsed))
 classBodyStatement =
-  try (skipMany1 (tokWithEndLoc SemiColon) $> Nothing)
+  skipMany1 semiColon $> Nothing
     <|> try do
       startLoc <- getLocation
       mst <- optionBool (tok KW_Static)
@@ -705,7 +705,7 @@ stmtNoTrail =
   getLocation >>= \startLoc ->
     -- empty statement
     do
-      loc <- tokWithEndLoc SemiColon
+      loc <- semiColon
       return (Empty (startLoc, loc), loc)
       <|>
       -- inner block
@@ -716,7 +716,7 @@ stmtNoTrail =
         tok KW_Assert
         e <- noLoc exp
         me2 <- optionMaybe $ colon >> noLoc exp
-        loc <- tokWithEndLoc SemiColon
+        loc <- semiColon
         return (Assert (startLoc, loc) e me2, loc)
       <|>
       -- switch stmts
@@ -732,28 +732,28 @@ stmtNoTrail =
         s <- noLoc stmt
         tok KW_While
         e <- noLoc $ parens (noLoc exp)
-        endLoc <- tokWithEndLoc SemiColon
+        endLoc <- semiColon
         return (Do (startLoc, endLoc) s e, endLoc)
       <|>
       -- break
       do
         tok KW_Break
         mi <- optionMaybe (noLoc ident)
-        endLoc <- tokWithEndLoc SemiColon
+        endLoc <- semiColon
         return (Break (startLoc, endLoc) mi, endLoc)
       <|>
       -- continue
       do
         tok KW_Continue
         mi <- optionMaybe (noLoc ident)
-        loc <- tokWithEndLoc SemiColon
+        loc <- semiColon
         return (Continue (startLoc, loc) mi, loc)
       <|>
       -- return
       do
         tok KW_Return
         me <- optionMaybe (noLoc exp)
-        endLoc <- tokWithEndLoc SemiColon
+        endLoc <- semiColon
         return (Return (startLoc, endLoc) me, endLoc)
       <|>
       -- synchronized
@@ -767,7 +767,7 @@ stmtNoTrail =
       do
         tok KW_Throw
         e <- noLoc exp
-        loc <- tokWithEndLoc SemiColon
+        loc <- semiColon
         return (Throw (startLoc, loc) e, loc)
       <|>
       -- try-catch, both with and without a finally clause
