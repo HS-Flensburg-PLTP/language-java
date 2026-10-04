@@ -46,21 +46,15 @@ module Language.Java.Parser
     typeParam,
     name,
     ident,
-    manyNonEmpty,
     manyNonEmptyLoc,
-    sepByNonEmpty,
     sepByNonEmptyLoc,
     sepEndByLoc,
     trySepByNonEmptyLoc,
     optionMaybeLoc,
-    optionMap,
-    optionConst,
-    optionBool,
     comma,
     semiColon,
     period,
     colon,
-    manyMaybes,
   )
 where
 
@@ -72,7 +66,6 @@ import Data.Functor (void, ($>), (<&>))
 import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Maybe (catMaybes)
 import Language.Java.Lexer (L1 (..), Token (..), lexer)
 import Language.Java.SourceSpan (dummyLocation, locationEof)
 import Language.Java.Syntax
@@ -96,6 +89,8 @@ import Text.Parsec
     (<?>),
     (<|>),
   )
+import Text.Parsec.Extra (manyMaybes, optionBool, optionConst)
+import Text.Parsec.NonEmpty (manyNonEmpty, neoptList, sepByNonEmpty, trySepByNonEmpty)
 import Text.Parsec.Pos
 import Text.ParserCombinators.Parsec.Error
 import Prelude hiding (exp, (>>), (>>=))
@@ -1489,58 +1484,19 @@ attrFixedIdent fixed result = (result,) <$> getEndLoc <* fixedIdent fixed
 
 ------------------------------------------------------------
 
--- | @manyMaybes p@ applies the parser @p@ /zero/ or more times.
--- Returns a list of the returned 'Just' values of @p@.
-manyMaybes :: P (Maybe a) -> P [a]
-manyMaybes = fmap catMaybes . many
-
 -- | @optionMaybeLoc loc p@ tries to apply parser @p@.
 -- If @p@ fails without consuming input, it returns @('Nothing', loc)@,
 -- otherwise it returns 'Data.Bifunctor.first' 'Just' the value returned by @p@.
 optionMaybeLoc :: SourcePos -> P (a, SourcePos) -> P (Maybe a, SourcePos)
 optionMaybeLoc loc p = option (Nothing, loc) (Bifunctor.first Just <$> p)
 
--- | @optionMap x f p@ tries to apply parser @p@.
--- If @p@ fails without consuming input, it returns @x@,
--- otherwise it returns @f@ the value returned by @p@.
-optionMap :: b -> (a -> b) -> P a -> P b
-optionMap a b p = option a (b <$> p)
-
--- | @optionConst a b p@ tries to apply parser @p@.
--- If @p@ fails without consuming input, it returns @a@,
--- otherwise it returns @b@.
-optionConst :: b -> b -> P a -> P b
-optionConst a b = optionMap a (const b)
-
--- | @optionBool p@ tries to apply parser @p@.
--- If @p@ fails without consuming input, it returns 'False',
--- otherwise it returns 'True'.
-optionBool :: P a -> P Bool
-optionBool = optionConst False True
-
--- | @neoptList p@ tries to apply parser @p@.
--- If @p@ fails without consuming input, it returns '[]',
--- otherwise it returns 'Data.List.NonEmpty.toList' the value returned by @p@.
-neoptList :: P (NonEmpty a) -> P [a]
-neoptList = optionMap [] NonEmpty.toList
-
 manyNonEmptyLoc :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
 manyNonEmptyLoc p =
   manyNonEmpty p
     <&> \ll -> (NonEmpty.map fst ll, snd (NonEmpty.last ll))
 
--- | @manyNonEmpty p@ applies the parser @p@ /one/ or more times.
--- Returns a 'NonEmpty' list of the returned values of @p@.
-manyNonEmpty :: P a -> P (NonEmpty a)
-manyNonEmpty p = liftA2 (:|) p (many p)
-
 sepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
 sepByNonEmptyLoc p sep = sepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
-
--- | @sepByNonEmpty p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
--- Returns a 'NonEmpty' list of values returned by @p@.
-sepByNonEmpty :: P a -> P sep -> P (NonEmpty a)
-sepByNonEmpty p sep = liftA2 (:|) p (many $ sep >> p)
 
 sepEndByLoc :: P (a, SourcePos) -> P SourcePos -> P ([a], SourcePos)
 sepEndByLoc p sep = sepEndBy1Loc <|> ([],) <$> getLocation
@@ -1555,9 +1511,6 @@ sepEndByLoc p sep = sepEndBy1Loc <|> ([],) <$> getLocation
 
 trySepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
 trySepByNonEmptyLoc p sep = trySepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
-
-trySepByNonEmpty :: P a -> P sep -> P (NonEmpty a)
-trySepByNonEmpty p sep = liftA2 (:|) p $ many $ try $ sep >> p
 
 (|>>) :: P (a, SourcePos) -> P (a -> a, SourcePos) -> P (a, SourcePos)
 start |>> suffix =

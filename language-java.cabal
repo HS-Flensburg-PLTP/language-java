@@ -56,6 +56,8 @@ Library
                         Language.Java.Syntax.VarDeclId
                         Language.Java.Syntax.VarInit
                         Language.Java.Syntax.Literal
+                        Text.Parsec.Extra
+                        Text.Parsec.NonEmpty
  
   Other-modules:        Language.Java.Syntax.IdentCollection
                         Language.Java.Syntax.ClassInfo
