@@ -60,6 +60,7 @@ module Language.Java.Parser
     semiColon,
     period,
     colon,
+    manyMaybes,
   )
 where
 
@@ -178,7 +179,7 @@ compilationUnit =
   CompilationUnit
     <$> optionMaybe packageDecl
     <*> many importDecl
-    <*> (catMaybes <$> many typeDecl)
+    <*> manyMaybes typeDecl
     <* eof
 
 packageDecl :: P PackageDecl
@@ -288,7 +289,7 @@ enumBodyDecls :: P [Decl Parsed]
 enumBodyDecls = semiColon >> classBodyStatements
 
 classBodyStatements :: P [Decl Parsed]
-classBodyStatements = catMaybes <$> many classBodyStatement
+classBodyStatements = manyMaybes classBodyStatement
 
 -- Interface declarations
 
@@ -313,7 +314,7 @@ interfaceDecl = do
   return \loc ms -> InterfaceDecl (loc, endLoc) InterfaceNormal ms i tps exs ps bod
 
 interfaceBody :: P (InterfaceBody Parsed, SourcePos)
-interfaceBody = braces (InterfaceBody . catMaybes <$> many interfaceBodyDecl)
+interfaceBody = braces (InterfaceBody <$> manyMaybes interfaceBodyDecl)
 
 -- Declarations
 
@@ -1487,6 +1488,11 @@ attrFixedIdent :: String -> a -> P (a, SourcePos)
 attrFixedIdent fixed result = (result,) <$> getEndLoc <* fixedIdent fixed
 
 ------------------------------------------------------------
+
+-- | @manyMaybes p@ applies the parser @p@ /zero/ or more times.
+-- Returns a list of the returned 'Just' values of @p@.
+manyMaybes :: P (Maybe a) -> P [a]
+manyMaybes = fmap catMaybes . many
 
 -- | @optionMaybeLoc loc p@ tries to apply parser @p@.
 -- If @p@ fails without consuming input, it returns @('Nothing', loc)@,
