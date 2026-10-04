@@ -226,26 +226,29 @@ normalClassDecl :: P (Mod (ClassDecl Parsed), SourcePos)
 normalClassDecl = do
   tok KW_Class
   i <- noLoc ident
-  tps <- neoptList typeParams
-  mex <- optionMaybe extends
-  imp <- neoptList implements
+  tps <- typeParams
+  mex <- extends1
+  imp <- implements
   (bod, endLoc) <- classBody
-  return (\loc ms -> ClassDecl (loc, endLoc) ms i tps (fmap NonEmpty.head mex) imp bod, endLoc)
+  return (\loc ms -> ClassDecl (loc, endLoc) ms i tps mex imp bod, endLoc)
 
-extends :: P (NonEmpty RefType)
-extends = tok KW_Extends >> refTypeList
+extends1 :: P (Maybe RefType)
+extends1 = optionMaybe (tok KW_Extends >> noLoc refType)
 
-permits :: P (NonEmpty RefType)
-permits = fixedIdent "permits" >> refTypeList
+extends :: P [RefType]
+extends = neoptList (tok KW_Extends >> refTypeList)
 
-implements :: P (NonEmpty RefType)
-implements = tok KW_Implements >> refTypeList
+permits :: P [RefType]
+permits = neoptList (fixedIdent "permits" >> refTypeList)
+
+implements :: P [RefType]
+implements = neoptList (tok KW_Implements >> refTypeList)
 
 enumClassDecl :: P (Mod (ClassDecl Parsed), SourcePos)
 enumClassDecl = do
   tok KW_Enum
   i <- noLoc ident
-  imp <- neoptList implements
+  imp <- implements
   (bod, endLoc) <- enumBody
   return (\loc ms -> EnumDecl (loc, endLoc) ms i imp bod, endLoc)
 
@@ -253,9 +256,9 @@ recordClassDecl :: P (Mod (ClassDecl Parsed), SourcePos)
 recordClassDecl = do
   tok KW_Record
   i <- noLoc ident
-  tps <- neoptList typeParams
+  tps <- typeParams
   fields <- noLoc $ parens $ sepBy recordField comma
-  imp <- neoptList implements
+  imp <- implements
   (bod, endLoc) <- classBody
   return (\loc ms -> RecordDecl (loc, endLoc) ms i tps fields imp bod, endLoc)
   where
@@ -290,9 +293,9 @@ annInterfaceDecl :: P (Mod (InterfaceDecl Parsed))
 annInterfaceDecl = do
   tok KW_AnnInterface
   i <- noLoc ident
-  tps <- neoptList typeParams
-  exs <- neoptList extends
-  ps <- neoptList permits
+  tps <- typeParams
+  exs <- extends
+  ps <- permits
   (bod, endLoc) <- interfaceBody
   return \loc ms -> InterfaceDecl (loc, endLoc) InterfaceAnnotation ms i tps exs ps bod
 
@@ -300,9 +303,9 @@ interfaceDecl :: P (Mod (InterfaceDecl Parsed))
 interfaceDecl = do
   tok KW_Interface
   i <- noLoc ident
-  tps <- neoptList typeParams
-  exs <- neoptList extends
-  ps <- neoptList permits
+  tps <- typeParams
+  exs <- extends
+  ps <- permits
   (bod, endLoc) <- interfaceBody
   return \loc ms -> InterfaceDecl (loc, endLoc) InterfaceNormal ms i tps exs ps bod
 
@@ -346,11 +349,11 @@ fieldDecl = do
 
 methodDecl :: P (Mod (MemberDecl Parsed))
 methodDecl = do
-  tps <- neoptList typeParams
+  tps <- typeParams
   rt <- resultType
   i <- noLoc ident
   fps <- formalParams
-  thr <- neoptList throws
+  thr <- throws
   (bod, endLoc) <- methodBody
   return \loc ms -> MethodDecl (loc, endLoc) ms tps rt i fps thr Nothing bod
 
@@ -362,10 +365,10 @@ methodBody = onlySemi <|> fullBody
 
 constrDecl :: P (Mod (MemberDecl Parsed))
 constrDecl = do
-  tps <- neoptList typeParams
+  tps <- typeParams
   i <- noLoc ident
   fps <- option [] formalParams -- record constructors omit the argument list
-  thr <- neoptList throws
+  thr <- throws
   (bod, endLoc) <- constrBody
   return \loc ms -> ConstructorDecl (loc, endLoc) ms tps i fps thr bod
 
@@ -422,11 +425,11 @@ interfaceMemberDecl =
 
 absMethodDecl :: P (Mod (MemberDecl Parsed))
 absMethodDecl = do
-  tps <- neoptList typeParams
+  tps <- typeParams
   rt <- resultType
   i <- noLoc ident
   fps <- formalParams
-  thr <- neoptList throws
+  thr <- throws
   def <- optionMaybe defaultValue
   endLoc <- semiColon
   return \loc ms -> MethodDecl (loc, endLoc) ms tps rt i fps thr def (MethodBody Nothing)
@@ -434,8 +437,8 @@ absMethodDecl = do
 defaultValue :: P (Exp Parsed)
 defaultValue = tok KW_Default >> noLoc exp
 
-throws :: P (NonEmpty RefType)
-throws = tok KW_Throws >> refTypeList
+throws :: P [RefType]
+throws = neoptList (tok KW_Throws >> refTypeList)
 
 -- Formal parameters
 
@@ -1479,8 +1482,8 @@ refTypeList = sepByNonEmpty (noLoc refType) comma
 ----------------------------------------------------------------------------
 -- Type parameters and arguments
 
-typeParams :: P (NonEmpty TypeParam)
-typeParams = noLoc $ angles $ sepByNonEmpty typeParam comma
+typeParams :: P [TypeParam]
+typeParams = neoptList $ noLoc $ angles $ sepByNonEmpty typeParam comma
 
 typeParam :: P TypeParam
 typeParam = TypeParam <$> noLoc ident <*> neoptList bounds
