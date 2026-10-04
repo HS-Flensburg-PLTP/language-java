@@ -220,7 +220,10 @@ classOrInterfaceDecl = do
       return (InterfaceTypeDecl (iDecl startLoc ms))
 
 classDecl :: P (Mod (ClassDecl Parsed), SourcePos)
-classDecl = normalClassDecl <|> recordClassDecl <|> enumClassDecl
+classDecl =
+  normalClassDecl
+    <|> recordClassDecl
+    <|> enumClassDecl
 
 normalClassDecl :: P (Mod (ClassDecl Parsed), SourcePos)
 normalClassDecl = do
@@ -605,7 +608,12 @@ blockStmt =
     <|> Bifunctor.first BlockStmt <$> stmt
 
 stmt :: P (Stmt Parsed, SourcePos)
-stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
+stmt =
+  ifStmt
+    <|> whileStmt
+    <|> forStmt
+    <|> labeledStmt
+    <|> stmtNoTrail
   where
     ifStmt = do
       startLoc <- getLocation
@@ -655,7 +663,12 @@ stmt = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
       return (Labeled (startLoc, endLoc) lbl s, endLoc)
 
 stmtNSI :: P (Stmt Parsed, SourcePos)
-stmtNSI = ifStmt <|> whileStmt <|> forStmt <|> labeledStmt <|> stmtNoTrail
+stmtNSI =
+  ifStmt
+    <|> whileStmt
+    <|> forStmt
+    <|> labeledStmt
+    <|> stmtNoTrail
   where
     ifStmt = do
       startLoc <- getLocation
@@ -931,7 +944,12 @@ exp :: P (Exp Parsed, SourcePos)
 exp = assignExp
 
 assignExp :: P (Exp Parsed, SourcePos)
-assignExp = try switchExp <|> try methodRef <|> try lambdaExp <|> try assignment <|> condExp
+assignExp =
+  try switchExp
+    <|> try methodRef
+    <|> try lambdaExp
+    <|> try assignment
+    <|> condExp
 
 condExp :: P (Exp Parsed, SourcePos)
 condExp = do
@@ -954,34 +972,35 @@ infixlExpList p sep = do
     return \(e1, _) (e2, l2) -> (BinOp (startLoc, l2) e1 op e2, l2)
 
 condOrExp :: P (Exp Parsed, SourcePos)
-condOrExp = infixlExpList condAndExp (attrTok Op_OOr COr)
+condOrExp = infixlExpList condAndExp $ attrTok Op_OOr COr
 
 condAndExp :: P (Exp Parsed, SourcePos)
-condAndExp = infixlExpList orExp (attrTok Op_AAnd CAnd)
+condAndExp = infixlExpList orExp $ attrTok Op_AAnd CAnd
 
 orExp :: P (Exp Parsed, SourcePos)
-orExp = infixlExpList xorExp (attrTok Op_Or Or)
+orExp = infixlExpList xorExp $ attrTok Op_Or Or
 
 xorExp :: P (Exp Parsed, SourcePos)
-xorExp = infixlExpList andExp (attrTok Op_Caret Xor)
+xorExp = infixlExpList andExp $ attrTok Op_Caret Xor
 
 andExp :: P (Exp Parsed, SourcePos)
-andExp = infixlExpList eqExp (attrTok Op_And And)
+andExp = infixlExpList eqExp $ attrTok Op_And And
 
 eqExp :: P (Exp Parsed, SourcePos)
-eqExp = infixlExpList relExp (attrTok Op_Equals Equal <|> attrTok Op_BangE NotEq)
+eqExp =
+  infixlExpList relExp $
+    attrTok Op_Equals Equal
+      <|> attrTok Op_BangE NotEq
 
 relExp :: P (Exp Parsed, SourcePos)
 relExp = do
   startLoc <- getLocation
   (e, endLoc) <-
-    infixlExpList
-      shiftExp
-      ( attrTok Op_LThan LThan
-          <|> attrTok Op_GThan GThan
-          <|> attrTok Op_LThanE LThanE
-          <|> attrTok Op_GThanE GThanE
-      )
+    infixlExpList shiftExp $
+      attrTok Op_LThan LThan
+        <|> attrTok Op_GThan GThan
+        <|> attrTok Op_LThanE LThanE
+        <|> attrTok Op_GThanE GThanE
   option (e, endLoc) do
     tok KW_Instanceof
     (t, refLoc) <- refType
@@ -990,18 +1009,23 @@ relExp = do
 
 shiftExp :: P (Exp Parsed, SourcePos)
 shiftExp =
-  infixlExpList
-    addExp
-    ( attrTok Op_LShift LShift
-        <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift)
-        <|> try (tok Op_GThan >> tok Op_GThan $> RShift)
-    )
+  infixlExpList addExp $
+    attrTok Op_LShift LShift
+      <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift)
+      <|> try (tok Op_GThan >> tok Op_GThan $> RShift)
 
 addExp :: P (Exp Parsed, SourcePos)
-addExp = infixlExpList mulExp (attrTok Op_Plus Add <|> attrTok Op_Minus Sub)
+addExp =
+  infixlExpList mulExp $
+    attrTok Op_Plus Add
+      <|> attrTok Op_Minus Sub
 
 mulExp :: P (Exp Parsed, SourcePos)
-mulExp = infixlExpList unaryExp (attrTok Op_Star Mult <|> attrTok Op_Slash Div <|> attrTok Op_Percent Rem)
+mulExp =
+  infixlExpList unaryExp $
+    attrTok Op_Star Mult
+      <|> attrTok Op_Slash Div
+      <|> attrTok Op_Percent Rem
 
 unaryExp :: P (Exp Parsed, SourcePos)
 unaryExp =
@@ -1032,7 +1056,9 @@ primary :: P (Exp Parsed, SourcePos)
 primary = primaryNPS |>> primarySuffix
 
 primaryNPS :: P (Exp Parsed, SourcePos)
-primaryNPS = try arrayCreation <|> primaryNoNewArrayNPS
+primaryNPS =
+  try arrayCreation
+    <|> primaryNoNewArrayNPS
 
 -- unused
 -- primaryNoNewArray = startSuff primaryNoNewArrayNPS primarySuffix
@@ -1121,10 +1147,9 @@ lambdaParams :: P (LambdaParams Parsed)
 lambdaParams =
   LambdaSingleParam <$> noLoc ident
     <|> noLoc
-      ( parens
-          ( LambdaFormalParams <$> try (sepBy formalParam comma)
-              <|> LambdaInferredParams <$> sepBy (noLoc ident) comma
-          )
+      ( parens $
+          LambdaFormalParams <$> try (sepBy formalParam comma)
+            <|> LambdaInferredParams <$> sepBy (noLoc ident) comma
       )
 
 lambdaExp :: P (Exp Parsed, SourcePos)
@@ -1142,7 +1167,9 @@ methodRef = do
   startLoc <- getLocation
   n <- noLoc name
   tok MethodRefSep
-  (mrt, loc) <- attrTokWithEndLoc KW_New MethodRefConstructor <|> Bifunctor.first MethodRefIdent <$> ident
+  (mrt, loc) <-
+    attrTokWithEndLoc KW_New MethodRefConstructor
+      <|> Bifunctor.first MethodRefIdent <$> ident
   return (MethodRef (startLoc, loc) n mrt, loc)
 
 {-
@@ -1378,14 +1405,22 @@ literal = do
 preIncDecOp, prefixOp, postfixOp :: P (SourcePos -> Exp Parsed -> Exp Parsed, SourcePos)
 preIncDecOp = do
   startLoc <- getLocation
-  (constr, endLoc) <- attrTokWithEndLoc Op_PPlus PreIncrement <|> attrTokWithEndLoc Op_MMinus PreDecrement
+  (constr, endLoc) <-
+    attrTokWithEndLoc Op_PPlus PreIncrement
+      <|> attrTokWithEndLoc Op_MMinus PreDecrement
   return (\expEndLoc -> constr (startLoc, expEndLoc), endLoc)
 prefixOp = do
   startLoc <- getLocation
-  (constr, endLoc) <- attrTokWithEndLoc Op_Bang PreNot <|> attrTokWithEndLoc Op_Tilde PreBitCompl <|> attrTokWithEndLoc Op_Plus PrePlus <|> attrTokWithEndLoc Op_Minus PreMinus
+  (constr, endLoc) <-
+    attrTokWithEndLoc Op_Bang PreNot
+      <|> attrTokWithEndLoc Op_Tilde PreBitCompl
+      <|> attrTokWithEndLoc Op_Plus PrePlus
+      <|> attrTokWithEndLoc Op_Minus PreMinus
   return (\expEndLoc -> constr (startLoc, expEndLoc), endLoc)
 postfixOp = do
-  (constr, endLoc) <- attrTokWithEndLoc Op_PPlus PostIncrement <|> attrTokWithEndLoc Op_MMinus PostDecrement
+  (constr, endLoc) <-
+    attrTokWithEndLoc Op_PPlus PostIncrement
+      <|> attrTokWithEndLoc Op_MMinus PostDecrement
   return (\expStartLoc -> constr (expStartLoc, endLoc), endLoc)
 
 assignOp :: P AssignOp
@@ -1474,7 +1509,10 @@ classTypeSpec = do
   return ((i, tas), loc)
 
 resultType :: P (Maybe Type)
-resultType = attrTok KW_Void Nothing <|> Just <$> ttype <?> "resultType"
+resultType =
+  attrTok KW_Void Nothing
+    <|> Just <$> ttype
+    <?> "resultType"
 
 refTypeList :: P (NonEmpty RefType)
 refTypeList = sepByNonEmpty (noLoc refType) comma
