@@ -1063,9 +1063,7 @@ primaryNoNewArrayNPS = do
       loc <- tokWithEndLoc KW_This
       return (This (startLoc, loc), loc)
     <|> parens (noLoc exp)
-    <|>
-    -- TODO: These two following should probably be merged more
-    try do
+    <|> try do
       rt <- resultType
       void period
       loc <- tokWithEndLoc KW_Class
