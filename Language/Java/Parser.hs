@@ -923,8 +923,8 @@ assignment = do
 
 lhs :: P (Lhs Parsed)
 lhs =
-  try (FieldLhs <$> fieldAccess)
-    <|> try (ArrayLhs <$> noLoc arrayAccess)
+  FieldLhs <$> try fieldAccess
+    <|> ArrayLhs <$> try (noLoc arrayAccess)
     <|> NameLhs <$> noLoc name
 
 exp :: P (Exp Parsed, SourcePos)
@@ -1058,8 +1058,8 @@ primaryNoNewArrayNPS = do
       loc <- tokWithEndLoc KW_This
       return (ThisClass (startLoc, loc) n, loc)
     <|> try instanceCreationNPS
-    <|> try (Bifunctor.first MethodInv <$> methodInvocationNPS)
-    <|> try (Bifunctor.first FieldAccess <$> fieldAccessNPS)
+    <|> Bifunctor.first MethodInv <$> try methodInvocationNPS
+    <|> Bifunctor.first FieldAccess <$> try fieldAccessNPS
     <|> Bifunctor.first ArrayAccess <$> arrayAccessNPS
 
 primarySuffix :: P (Exp Parsed -> Exp Parsed, SourcePos)
