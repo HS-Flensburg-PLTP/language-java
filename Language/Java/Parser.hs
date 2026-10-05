@@ -473,6 +473,7 @@ ellipsis = period >> period >> period
 
 -- Modifiers
 
+-- TODO: Enforce modifier rules.
 modifier :: P (Modifier Parsed)
 modifier =
   Annotation <$> annotation
