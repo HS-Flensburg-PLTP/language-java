@@ -157,8 +157,8 @@ instance Located (TypeDecl p) where
 
 -- | A class declaration specifies a new named reference type.
 data ClassDecl p
-  = ClassDecl SourceSpan [Modifier p] Ident [TypeParam] (Maybe RefType) [RefType] (ClassBody p)
-  | RecordDecl SourceSpan [Modifier p] Ident [TypeParam] [RecordFieldDecl] [RefType] (ClassBody p)
+  = ClassDecl SourceSpan [Modifier p] Ident [TypeParam p] (Maybe RefType) [RefType] (ClassBody p)
+  | RecordDecl SourceSpan [Modifier p] Ident [TypeParam p] [RecordFieldDecl] [RefType] (ClassBody p)
   | EnumDecl SourceSpan [Modifier p] Ident [RefType] (EnumBody p)
   deriving (Typeable, Generic, Show, Data)
 
@@ -196,7 +196,7 @@ data EnumConstant p = EnumConstant Ident [Argument p] (Maybe (ClassBody p))
 --   no implementation, but otherwise unrelated classes can implement it by
 --   providing implementations for its abstract methods.
 data InterfaceDecl p
-  = InterfaceDecl SourceSpan InterfaceKind [Modifier p] Ident [TypeParam] [RefType {- extends -}] [RefType {- permits -}] (InterfaceBody p)
+  = InterfaceDecl SourceSpan InterfaceKind [Modifier p] Ident [TypeParam p] [RefType {- extends -}] [RefType {- permits -}] (InterfaceBody p)
   deriving (Typeable, Generic, Show, Data)
 
 instance (EqExtension p) => Eq (InterfaceDecl p) where
@@ -238,9 +238,9 @@ data MemberDecl p
   = -- | The variables of a class type are introduced by field declarations.
     FieldDecl SourceSpan [Modifier p] Type (NonEmpty (VarDecl p))
   | -- | A method declares executable code that can be invoked, passing a fixed number of values as arguments.
-    MethodDecl SourceSpan [Modifier p] [TypeParam] (Maybe Type) Ident [FormalParam p] [ExceptionType] (Maybe (Exp p)) (MethodBody p)
+    MethodDecl SourceSpan [Modifier p] [TypeParam p] (Maybe Type) Ident [FormalParam p] [ExceptionType] (Maybe (Exp p)) (MethodBody p)
   | -- | A constructor is used in the creation of an object that is an instance of a class.
-    ConstructorDecl SourceSpan [Modifier p] [TypeParam] Ident [FormalParam p] [ExceptionType] (ConstructorBody p)
+    ConstructorDecl SourceSpan [Modifier p] [TypeParam p] Ident [FormalParam p] [ExceptionType] (ConstructorBody p)
   | -- | A member class is a class whose declaration is directly enclosed in another class or interface declaration.
     MemberClassDecl (ClassDecl p)
   | -- | A member interface is an interface whose declaration is directly enclosed in another class or interface declaration.
@@ -1041,7 +1041,7 @@ instance Located Literal where
 
 -- | A class is generic if it declares one or more type variables. These type variables are known
 --   as the type parameters of the class.
-data TypeParam = TypeParam Ident [RefType]
+data TypeParam p = TypeParam [Modifier p] Ident [RefType]
   deriving (Show, Typeable, Generic, Data, Eq)
 
 -----------------------------------------------------------------------

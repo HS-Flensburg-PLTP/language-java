@@ -606,9 +606,10 @@ instance Pretty PrimType where
   prettyPrec _ (FloatT _) = text "float"
   prettyPrec _ (DoubleT _) = text "double"
 
-instance Pretty TypeParam where
-  prettyPrec p (TypeParam ident rts) =
-    prettyPrec p ident
+instance (PrettyExtension p) => Pretty (TypeParam p) where
+  prettyPrec p (TypeParam mods ident rts) =
+    hsep (map (prettyPrec p) mods)
+      <+> prettyPrec p ident
       <+> opt
         (not $ null rts)
         ( hsep $
