@@ -252,6 +252,7 @@ enumClassDecl = do
   (bod, endLoc) <- enumBody
   return (\loc ms -> EnumDecl (loc, endLoc) ms i imp bod, endLoc)
 
+-- Since Java 16
 recordClassDecl :: P (Mod (ClassDecl Parsed), SourcePos)
 recordClassDecl = do
   tok KW_Record
