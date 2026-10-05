@@ -120,11 +120,11 @@ instance LocatedExtension Analyzed
 -- Packages
 
 -- | A compilation unit is the top level syntactic goal symbol of a Java program.
-data CompilationUnit p = CompilationUnit (Maybe PackageDecl) [ImportDecl] [TypeDecl p]
+data CompilationUnit p = CompilationUnit (Maybe (PackageDecl p)) [ImportDecl] [TypeDecl p]
   deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | A package declaration appears within a compilation unit to indicate the package to which the compilation unit belongs.
-newtype PackageDecl = PackageDecl Name
+data PackageDecl p = PackageDecl [Modifier p] Name
   deriving (Show, Typeable, Generic, Data, Eq)
 
 -- | An import declaration allows a static member or a named type to be referred to by a single unqualified identifier.

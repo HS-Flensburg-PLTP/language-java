@@ -117,9 +117,12 @@ instance AnalyzedTransformer CompilationUnit where
           )
             scope
      in CompilationUnit
-          mbPackageDecl
+          (fmap (transformToAnalyzed scope) mbPackageDecl)
           importDecls
           (map (transformToAnalyzed newscope) typeDecls)
+
+instance AnalyzedTransformer PackageDecl where
+  transformToAnalyzed scope (PackageDecl mods name) = PackageDecl (map (transformToAnalyzed scope) mods) name
 
 instance AnalyzedTransformer ClassDecl where
   transformToAnalyzed scope (ClassDecl src modifiers idnt typeParams mbRefType refTypes classBody@(ClassBody decls)) =

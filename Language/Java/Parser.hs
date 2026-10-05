@@ -12,9 +12,9 @@ module Language.Java.Parser
     ParserState (..),
     getLocation,
     compilationUnit,
-    packageDecl,
-    importDecl,
-    typeDecl,
+    packageDeclaration,
+    importDeclaration,
+    typeDeclaration,
     classDecl,
     interfaceDecl,
     memberDecl,
@@ -172,20 +172,21 @@ parserWithState state p srcName src =
 compilationUnit :: P (CompilationUnit Parsed)
 compilationUnit =
   CompilationUnit
-    <$> optionMaybe packageDecl
-    <*> many importDecl
-    <*> manyMaybes typeDecl
+    <$> optionMaybe packageDeclaration
+    <*> many importDeclaration
+    <*> manyMaybes typeDeclaration
     <* eof
 
-packageDecl :: P PackageDecl
-packageDecl =
+packageDeclaration :: P (PackageDecl Parsed)
+packageDeclaration =
   PackageDecl
-    <$ tok KW_Package
+    <$> many (Annotation <$> annotation)
+    <* tok KW_Package
     <*> noLoc name
     <* semiColon
 
-importDecl :: P ImportDecl
-importDecl = do
+importDeclaration :: P ImportDecl
+importDeclaration = do
   startLoc <- getLocation
   tok KW_Import
   st <- optionBool $ tok KW_Static
@@ -194,8 +195,8 @@ importDecl = do
   endLoc <- semiColon
   return (ImportDecl (startLoc, endLoc) st n star)
 
-typeDecl :: P (Maybe (TypeDecl Parsed))
-typeDecl =
+typeDeclaration :: P (Maybe (TypeDecl Parsed))
+typeDeclaration =
   Just <$> classOrInterfaceDecl
     <|> Nothing <$ semiColon
 
