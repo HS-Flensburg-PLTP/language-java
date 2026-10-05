@@ -1410,7 +1410,7 @@ nonArrayType =
 classType :: P (ClassType, SourcePos)
 classType = do
   startLoc <- getLocation
-  (cts, loc) <- sepByNonEmptyLoc classTypeSpec period
+  (cts, loc) <- trySepByNonEmptyLoc classTypeSpec period
   return (ClassType (startLoc, loc) cts, loc)
 
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
