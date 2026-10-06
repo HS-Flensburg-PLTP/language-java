@@ -90,7 +90,7 @@ import Text.Parsec
     (<|>),
   )
 import Text.Parsec.Extra (manyMaybes, optionBool, optionConst)
-import Text.Parsec.NonEmpty (manyNonEmpty, neoptList, sepByNonEmpty, trySepByNonEmpty)
+import qualified Text.Parsec.NonEmpty as NonEmpty
 import Text.Parsec.Pos
 import Text.ParserCombinators.Parsec.Error
 import Prelude hiding (exp, (>>), (>>=))
@@ -236,13 +236,13 @@ extends1 :: P (Maybe RefType)
 extends1 = optionMaybe (tok KW_Extends >> noLoc refType)
 
 extends :: P [RefType]
-extends = neoptList (tok KW_Extends >> refTypeList)
+extends = NonEmpty.neoptList (tok KW_Extends >> refTypeList)
 
 permits :: P [RefType]
-permits = neoptList (fixedIdent "permits" >> refTypeList)
+permits = NonEmpty.neoptList (fixedIdent "permits" >> refTypeList)
 
 implements :: P [RefType]
-implements = neoptList (tok KW_Implements >> refTypeList)
+implements = NonEmpty.neoptList (tok KW_Implements >> refTypeList)
 
 enumDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 enumDeclaration = do
@@ -385,20 +385,20 @@ explConstrInv =
   noLoc . endSemi $
     try
       ( ThisInvoke
-          <$> neoptList refTypeArgs
+          <$> NonEmpty.neoptList refTypeArgs
           <* tok KW_This
           <*> noLoc args
       )
       <|> try
         ( SuperInvoke
-            <$> neoptList refTypeArgs
+            <$> NonEmpty.neoptList refTypeArgs
             <* tok KW_Super
             <*> noLoc args
         )
       <|> PrimarySuperInvoke
         <$> noLoc primary
         <* period
-        <*> neoptList refTypeArgs
+        <*> NonEmpty.neoptList refTypeArgs
         <* tok KW_Super
         <*> noLoc args
 
@@ -439,7 +439,7 @@ defaultValue :: P (Exp Parsed)
 defaultValue = tok KW_Default >> noLoc exp
 
 throws :: P [RefType]
-throws = neoptList (tok KW_Throws >> refTypeList)
+throws = NonEmpty.neoptList (tok KW_Throws >> refTypeList)
 
 -- Formal parameters
 
@@ -464,7 +464,7 @@ formalParam = do
 catchFormalParam :: P (CatchFormalParam Parsed)
 catchFormalParam = do
   startLoc <- getLocation
-  typs <- sepByNonEmpty ((,) <$> many modifier <*> ttype) (tok Op_Or)
+  typs <- NonEmpty.sepBy ((,) <$> many modifier <*> ttype) (tok Op_Or)
   (vdi, loc) <- varDeclId
   return (CatchFormalParam (startLoc, loc) typs vdi)
 
@@ -508,7 +508,7 @@ annotation = do
     <|> return (MarkerAnnotation (startLoc, nLoc) n)
 
 evlist :: P (NonEmpty (Ident, ElementValue Parsed))
-evlist = sepByNonEmpty elementValuePair comma
+evlist = NonEmpty.sepBy elementValuePair comma
 
 elementValuePair :: P (Ident, ElementValue Parsed)
 elementValuePair = (,) <$> noLoc ident <* tok Op_Equal <*> elementValue
@@ -526,7 +526,7 @@ elementValue =
 -- Variable declarations
 
 varDecls :: P (NonEmpty (VarDecl Parsed))
-varDecls = sepByNonEmpty varDecl comma
+varDecls = NonEmpty.sepBy varDecl comma
 
 varDecl :: P (VarDecl Parsed)
 varDecl = do
@@ -809,7 +809,7 @@ forInit =
   try do
     (_, m, t, vds) <- localVarDecl
     return (ForLocalVars m t vds)
-    <|> ForInitExps <$> sepByNonEmpty stmtExp comma
+    <|> ForInitExps <$> NonEmpty.sepBy stmtExp comma
 
 forUp :: P [Exp Parsed]
 forUp = sepBy stmtExp comma
@@ -836,7 +836,7 @@ switchLabelOld =
   tok KW_Default >> attrTokWithEndLoc Op_Colon Default
     <|> SwitchCase
       <$ tok KW_Case
-      <*> sepByNonEmpty (noLoc condExp) comma
+      <*> NonEmpty.sepBy (noLoc condExp) comma
         >>= attrTokWithEndLoc Op_Colon
 
 switchStmtNew :: P (SwitchBlock Parsed)
@@ -850,7 +850,7 @@ switchLabelNew :: P (SwitchLabel Parsed)
 switchLabelNew =
   SwitchCase
     <$ tok KW_Case
-    <*> sepByNonEmpty (noLoc condExp) comma
+    <*> NonEmpty.sepBy (noLoc condExp) comma
     <* tok LambdaArrow
     <|> Default <$ tok KW_Default <* tok LambdaArrow
 
@@ -922,7 +922,7 @@ postIncDec :: P (Exp Parsed)
 postIncDec = do
   startLoc <- getLocation
   e <- noLoc postfixExpNES
-  ops <- manyNonEmpty (noLoc postfixOp)
+  ops <- NonEmpty.many (noLoc postfixOp)
   return (foldl' (\a s -> s startLoc a) e ops)
 
 assignment :: P (Exp Parsed, SourcePos)
@@ -1092,7 +1092,7 @@ instanceCreationNPS :: P (Exp Parsed, SourcePos)
 instanceCreationNPS = do
   startLoc <- getLocation
   tok KW_New
-  tas <- neoptList (noLoc typeArgs)
+  tas <- NonEmpty.neoptList (noLoc typeArgs)
   tds <- typeDeclSpecifier
   (as, argsLoc) <- args
   (mcb, loc) <- optionMaybeLoc argsLoc classBody
@@ -1120,7 +1120,7 @@ instanceCreationSuffix :: P (Exp Parsed -> Exp Parsed, SourcePos)
 instanceCreationSuffix = do
   startLoc <- getLocation
   period >> tok KW_New
-  tas <- neoptList (noLoc typeArgs)
+  tas <- NonEmpty.neoptList (noLoc typeArgs)
   i <- noLoc ident
   (as, argsLoc) <- args
   (mcb, loc) <- optionMaybeLoc argsLoc classBody
@@ -1200,7 +1200,7 @@ methodInvocationNPS = do
   startLoc <- getLocation
   do
     tok KW_Super >> void period
-    rts <- neoptList refTypeArgs
+    rts <- NonEmpty.neoptList refTypeArgs
     i <- noLoc ident
     (as, loc) <- args
     return (SuperMethodCall (startLoc, loc) rts i as, loc)
@@ -1212,7 +1212,7 @@ methodInvocationNPS = do
       n <- noLoc name
       void period
       constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
-      rts <- neoptList refTypeArgs
+      rts <- NonEmpty.neoptList refTypeArgs
       i <- noLoc ident
       (as, loc) <- args
       return (constr (startLoc, loc) n rts i as, loc)
@@ -1239,7 +1239,7 @@ methodInvocationSuffix :: P (Exp Parsed -> MethodInvocation Parsed, SourcePos)
 methodInvocationSuffix = do
   startLoc <- getLocation
   void period
-  rts <- neoptList refTypeArgs
+  rts <- NonEmpty.neoptList refTypeArgs
   i <- noLoc ident
   (as, loc) <- args
   return (\p -> PrimaryMethodCall (startLoc, loc) p rts i as, loc)
@@ -1285,7 +1285,7 @@ arrayCreation = do
   tok KW_New
   t <- nonArrayType
   try do
-    ds <- manyNonEmpty emptyBrackets
+    ds <- NonEmpty.many emptyBrackets
     (ai, loc) <- arrayInit
     return (ArrayCreateInit (startLoc, loc) t (length ds) ai, loc)
     <|> do
@@ -1379,7 +1379,7 @@ refType = do
   startLoc <- getLocation
   do
     pt <- primType
-    loc :| bs <- manyNonEmpty emptyBrackets
+    loc :| bs <- NonEmpty.many emptyBrackets
     return
       ( Bifunctor.first
           ($ pt)
@@ -1429,26 +1429,26 @@ resultType =
     <?> "resultType"
 
 refTypeList :: P (NonEmpty RefType)
-refTypeList = sepByNonEmpty (noLoc refType) comma
+refTypeList = NonEmpty.sepBy (noLoc refType) comma
 
 ----------------------------------------------------------------------------
 -- Type parameters and arguments
 
 typeParameters :: P [TypeParam Parsed]
-typeParameters = neoptList $ noLoc $ angles $ sepByNonEmpty typeParameter comma
+typeParameters = NonEmpty.neoptList $ noLoc $ angles $ NonEmpty.sepBy typeParameter comma
 
 typeParameter :: P (TypeParam Parsed)
 typeParameter =
   TypeParam
     <$> many (Annotation <$> annotation)
     <*> noLoc ident
-    <*> neoptList bounds
+    <*> NonEmpty.neoptList bounds
 
 bounds :: P (NonEmpty RefType)
-bounds = tok KW_Extends >> sepByNonEmpty (noLoc refType) (tok Op_And)
+bounds = tok KW_Extends >> NonEmpty.sepBy (noLoc refType) (tok Op_And)
 
 typeArgs :: P (NonEmpty TypeArgument, SourcePos)
-typeArgs = angles $ sepByNonEmpty typeArg comma
+typeArgs = angles $ NonEmpty.sepBy typeArg comma
 
 typeArg :: P TypeArgument
 typeArg =
@@ -1497,11 +1497,11 @@ optionMaybeLoc loc p = option (Nothing, loc) (Bifunctor.first Just <$> p)
 
 manyNonEmptyLoc :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
 manyNonEmptyLoc p =
-  manyNonEmpty p
+  NonEmpty.many p
     <&> \ll -> (NonEmpty.map fst ll, snd (NonEmpty.last ll))
 
 sepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
-sepByNonEmptyLoc p sep = sepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
+sepByNonEmptyLoc p sep = NonEmpty.sepBy p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
 
 sepEndByLoc :: P (a, SourcePos) -> P SourcePos -> P ([a], SourcePos)
 sepEndByLoc p sep = sepEndBy1Loc <|> ([],) <$> getLocation
@@ -1515,7 +1515,7 @@ sepEndByLoc p sep = sepEndBy1Loc <|> ([],) <$> getLocation
         <|> return ([x], loc)
 
 trySepByNonEmptyLoc :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
-trySepByNonEmptyLoc p sep = trySepByNonEmpty p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
+trySepByNonEmptyLoc p sep = NonEmpty.trySepBy p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
 
 (|>>) :: P (a, SourcePos) -> P (a -> a, SourcePos) -> P (a, SourcePos)
 start |>> suffix =
