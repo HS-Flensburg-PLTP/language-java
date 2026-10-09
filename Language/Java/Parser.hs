@@ -111,8 +111,8 @@ getEndPos =
        in newPos file line (column + len)
     _ -> posEof
 
--- A trick to allow >> and >>=, normally infixr 1, to be
--- used inside branches of <|>, which is declared as infixl 1.
+-- A trick to allow >> and >>=, normally infixl 1, to be
+-- used inside branches of <|>, which is declared as infixr 1.
 -- There are no clashes with other operators of precedence 2.
 (>>) :: P a -> P b -> P b
 (>>) = (P.>>)
