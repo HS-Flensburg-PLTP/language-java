@@ -23,8 +23,8 @@ import Prelude hiding (exp)
 instance Arbitrary (CompilationUnit p) where
   arbitrary = CompilationUnit <$> arbitrary <*> arbitrary <*> ((: []) <$> arbitrary)
 
-instance Arbitrary PackageDecl where
-  arbitrary = PackageDecl <$> arbitrary
+instance Arbitrary (PackageDecl p) where
+  arbitrary = PackageDecl [] <$> arbitrary
 
 instance Arbitrary ImportDecl where
   arbitrary = ImportDecl dummySourceSpan <$> arbitrary <*> arbitrary <*> arbitrary
@@ -160,8 +160,8 @@ testJavaDirectory = "tests" </> "java"
 isJavaFile :: FilePath -> Bool
 isJavaFile f = ".java" `isSuffixOf` f
 
-toTestCase :: ParserMode -> Bool -> FilePath -> TestTree
-toTestCase mode expected jFile = testCase (takeBaseName jFile) doTest
+toTestCase :: Bool -> FilePath -> TestTree
+toTestCase expected jFile = testCase (takeBaseName jFile) doTest
   where
     doTest = do
       r <- E.try parseOne
@@ -169,7 +169,7 @@ toTestCase mode expected jFile = testCase (takeBaseName jFile) doTest
         Left (e :: E.SomeException) -> assertBool ("failure exception: " ++ show e) (not expected)
         Right (Left perr) -> assertBool ("failure parse error: " ++ show perr) (not expected)
         Right (Right p) -> assertBool ("success: " ++ show p) expected
-    parseOne = parserWithMode mode compilationUnit jFile <$> readFile jFile
+    parseOne = parser compilationUnit jFile <$> readFile jFile
 
 getAllJavaPaths :: FilePath -> IO [FilePath]
 getAllJavaPaths path = map (path </>) . filter isJavaFile <$> getDirectoryContents path
@@ -181,28 +181,21 @@ main = do
 
   allGoodJavas <- getAllJavaPaths (testJavaDirectory </> "good")
   allBadJavas <- getAllJavaPaths (testJavaDirectory </> "bad")
-  let -- the bad tests that work with shallow parsing
-      shallowGoodJavas = [testJavaDirectory </> "bad" </> "DiamondIncorrectPlacement.java"]
-      shallowBadJavas = filter (`notElem` shallowGoodJavas) allBadJavas
 
   defaultMain $
     testGroup
       "java"
-      [ testGroup "parsing unit good" (map (toTestCase ParseFull True) allGoodJavas),
-        testGroup
-          "parsing shallow unit good"
-          (map (toTestCase ParseShallow True) (allGoodJavas ++ shallowGoodJavas)),
-        testGroup "parsing unit bad" (map (toTestCase ParseFull False) allBadJavas),
-        testGroup "parsing shallow unit bad" (map (toTestCase ParseShallow False) shallowBadJavas),
+      [ testGroup "parsing unit good" (map (toTestCase True) allGoodJavas),
+        testGroup "parsing unit bad" (map (toTestCase False) allBadJavas),
         testProperty
           "parsing.generating==id (compilationUnit)"
-          ( \g -> case parserWithState (ParserState ParseFull False) compilationUnit "<input>" (show $ pretty g) of
+          ( \g -> case parser compilationUnit "<input>" (show $ pretty g) of
               Right g' -> g == g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),
         testProperty
           "parsing.generating==id (exp)"
-          ( \g -> case parserWithState (ParserState ParseFull False) (fst <$> exp) "<input>" (show $ pretty g) of
+          ( \g -> case parser (fst <$> exp) "<input>" (show $ pretty g) of
               Right g' -> counterexample (show $ pretty g) $ counterexample (show g') $ g == g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),

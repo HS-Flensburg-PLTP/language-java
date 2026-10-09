@@ -1,7 +1,7 @@
 module BinOpTests where
 
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Java.Parser (ParserMode (ParseFull), ParserState (ParserState), exp, parserWithState)
+import Language.Java.Parser (exp, parser)
 import Language.Java.Pretty (Pretty (pretty))
 import Language.Java.SourceSpan
 import Language.Java.Syntax
@@ -60,7 +60,7 @@ testBinOp =
 
 testRoundTrip :: (HasCallStack) => Exp Parsed -> TestTree
 testRoundTrip e = testCaseInfo (prettyExplicit e) $
-  case parserWithState (ParserState ParseFull False) exp "" (show (pretty e)) of
+  case parser exp "" (show (pretty e)) of
     Left err -> assertFailure (show err)
     Right (e', _) -> do
       e == e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'

@@ -1,9 +1,9 @@
 module Language.Java.SourceSpan
   ( Located (..),
     SourceSpan,
-    dummyLocation,
+    dummyPos,
     dummySourceSpan,
-    locationEof,
+    posEof,
     isEof,
   )
 where
@@ -12,17 +12,17 @@ import Text.Parsec.Pos (SourcePos, initialPos, newPos)
 
 type SourceSpan = (SourcePos, SourcePos)
 
-dummyLocation :: SourcePos
-dummyLocation = initialPos "<input>"
+dummyPos :: SourcePos
+dummyPos = initialPos "<input>"
 
 dummySourceSpan :: SourceSpan
-dummySourceSpan = (dummyLocation, dummyLocation)
+dummySourceSpan = (dummyPos, dummyPos)
 
-locationEof :: SourcePos
-locationEof = newPos "" 0 0
+posEof :: SourcePos
+posEof = newPos "" 0 0
 
 isEof :: SourcePos -> Bool
-isEof loc = loc == locationEof
+isEof pos = pos == posEof
 
 class Located a where
   sourceSpan :: a -> SourceSpan
