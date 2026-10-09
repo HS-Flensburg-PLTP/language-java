@@ -208,13 +208,13 @@ extends1 :: P (Maybe RefType)
 extends1 = optionMaybe (tok KW_Extends >> noPos refType)
 
 extends :: P [RefType]
-extends = NonEmpty.neoptList (tok KW_Extends >> refTypeList)
+extends = NonEmpty.optional (tok KW_Extends >> refTypeList)
 
 permits :: P [RefType]
-permits = NonEmpty.neoptList (fixedIdent "permits" >> refTypeList)
+permits = NonEmpty.optional (fixedIdent "permits" >> refTypeList)
 
 implements :: P [RefType]
-implements = NonEmpty.neoptList (tok KW_Implements >> refTypeList)
+implements = NonEmpty.optional (tok KW_Implements >> refTypeList)
 
 enumDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 enumDeclaration = do
@@ -357,20 +357,20 @@ explConstrInv =
   noPos . endSemi $
     try
       ( ThisInvoke
-          <$> NonEmpty.neoptList refTypeArgs
+          <$> NonEmpty.optional refTypeArgs
           <* tok KW_This
           <*> noPos args
       )
       <|> try
         ( SuperInvoke
-            <$> NonEmpty.neoptList refTypeArgs
+            <$> NonEmpty.optional refTypeArgs
             <* tok KW_Super
             <*> noPos args
         )
       <|> PrimarySuperInvoke
         <$> noPos primary
         <* period
-        <*> NonEmpty.neoptList refTypeArgs
+        <*> NonEmpty.optional refTypeArgs
         <* tok KW_Super
         <*> noPos args
 
@@ -411,7 +411,7 @@ defaultValue :: P (Exp Parsed)
 defaultValue = tok KW_Default >> noPos exp
 
 throws :: P [RefType]
-throws = NonEmpty.neoptList (tok KW_Throws >> refTypeList)
+throws = NonEmpty.optional (tok KW_Throws >> refTypeList)
 
 -- Formal parameters
 
@@ -1043,7 +1043,7 @@ instanceCreationNPS :: P (Exp Parsed, SourcePos)
 instanceCreationNPS = do
   startPos <- getPosition
   tok KW_New
-  tas <- NonEmpty.neoptList (noPos typeArgs)
+  tas <- NonEmpty.optional (noPos typeArgs)
   tds <- typeDeclSpecifier
   (as, argsPos) <- args
   (mcb, pos) <- optionMaybePos argsPos classBody
@@ -1071,7 +1071,7 @@ instanceCreationSuffix :: P (Exp Parsed -> Exp Parsed, SourcePos)
 instanceCreationSuffix = do
   startPos <- getPosition
   period >> tok KW_New
-  tas <- NonEmpty.neoptList (noPos typeArgs)
+  tas <- NonEmpty.optional (noPos typeArgs)
   i <- noPos ident
   (as, argsPos) <- args
   (mcb, pos) <- optionMaybePos argsPos classBody
@@ -1151,7 +1151,7 @@ methodInvocationNPS = do
   startPos <- getPosition
   do
     tok KW_Super >> void period
-    rts <- NonEmpty.neoptList refTypeArgs
+    rts <- NonEmpty.optional refTypeArgs
     i <- noPos ident
     (as, pos) <- args
     return (SuperMethodCall (startPos, pos) rts i as, pos)
@@ -1163,7 +1163,7 @@ methodInvocationNPS = do
       n <- noPos name
       void period
       constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
-      rts <- NonEmpty.neoptList refTypeArgs
+      rts <- NonEmpty.optional refTypeArgs
       i <- noPos ident
       (as, pos) <- args
       return (constr (startPos, pos) n rts i as, pos)
@@ -1190,7 +1190,7 @@ methodInvocationSuffix :: P (Exp Parsed -> MethodInvocation Parsed, SourcePos)
 methodInvocationSuffix = do
   startPos <- getPosition
   void period
-  rts <- NonEmpty.neoptList refTypeArgs
+  rts <- NonEmpty.optional refTypeArgs
   i <- noPos ident
   (as, pos) <- args
   return (\p -> PrimaryMethodCall (startPos, pos) p rts i as, pos)
@@ -1386,14 +1386,14 @@ refTypeList = NonEmpty.sepBy (noPos refType) comma
 -- Type parameters and arguments
 
 typeParameters :: P [TypeParam Parsed]
-typeParameters = NonEmpty.neoptList $ noPos $ angles $ NonEmpty.sepBy typeParameter comma
+typeParameters = NonEmpty.optional $ noPos $ angles $ NonEmpty.sepBy typeParameter comma
 
 typeParameter :: P (TypeParam Parsed)
 typeParameter =
   TypeParam
     <$> many (Annotation <$> annotation)
     <*> noPos ident
-    <*> NonEmpty.neoptList bounds
+    <*> NonEmpty.optional bounds
 
 bounds :: P (NonEmpty RefType)
 bounds = tok KW_Extends >> NonEmpty.sepBy (noPos refType) (tok Op_And)

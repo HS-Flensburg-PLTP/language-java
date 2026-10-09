@@ -1,6 +1,6 @@
 -- | Parser combinators for working with 'NonEmpty' lists.
 module Text.Parsec.NonEmpty
-  ( neoptList,
+  ( optional,
     many,
     sepBy,
     trySepBy,
@@ -13,23 +13,23 @@ import Text.Parsec (ParsecT, Stream, try)
 import qualified Text.Parsec as Parsec
 import Text.Parsec.Extra (optionMap)
 
--- | @neoptList p@ tries to apply parser @p@.
+-- | @NonEmpty.optional p@ tries to apply parser @p@.
 -- If @p@ fails without consuming input, it returns an empty list,
 -- otherwise it returns 'Data.List.NonEmpty.toList' the value returned by @p@.
-neoptList :: (Stream s m t) => ParsecT s u m (NonEmpty a) -> ParsecT s u m [a]
-neoptList = optionMap [] NonEmpty.toList
+optional :: (Stream s m t) => ParsecT s u m (NonEmpty a) -> ParsecT s u m [a]
+optional = optionMap [] NonEmpty.toList
 
--- | @manyNonEmpty p@ applies the parser @p@ /one/ or more times.
+-- | @NonEmpty.many p@ applies the parser @p@ /one/ or more times.
 -- Returns a 'NonEmpty' list of the returned values of @p@.
 many :: ParsecT s u m a -> ParsecT s u m (NonEmpty a)
 many p = liftA2 (:|) p (Parsec.many p)
 
--- | @sepByNonEmpty p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
+-- | @NonEmpty.sepBy p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
 -- Returns a 'NonEmpty' list of values returned by @p@.
 sepBy :: ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m (NonEmpty a)
 sepBy p sep = liftA2 (:|) p (Parsec.many $ sep >> p)
 
--- | @trySepByNonEmpty p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
+-- | @NonEmpty.trySepBy p sep@ parses /one/ or more occurrences of @p@, separated by @sep@.
 -- Returns a 'NonEmpty' list of values returned by @p@.
 -- Does /not/ fail if @sep@ or @p@ fails after consuming input.
 trySepBy :: ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m (NonEmpty a)
