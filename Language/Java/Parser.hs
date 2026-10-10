@@ -11,10 +11,10 @@ module Language.Java.Parser
     importDeclaration,
     typeDeclaration,
     classDecl,
-    interfaceDecl,
-    memberDecl,
-    fieldDecl,
-    methodDecl,
+    normalInterfaceDeclaration,
+    classMemberDeclaration,
+    fieldDeclaration,
+    methodDeclaration,
     constrDecl,
     interfaceMemberDecl,
     absMethodDecl,
@@ -70,11 +70,13 @@ import Text.Parsec
     chainl1,
     eof,
     getParserState,
+    lookAhead,
     many,
     many1,
     notFollowedBy,
     option,
     optionMaybe,
+    optional,
     parse,
     sepBy,
     sepEndBy,
@@ -188,7 +190,7 @@ classOrInterfaceDecl = do
     cd <- noPos classDecl
     return (ClassTypeDecl (cd startPos ms))
     <|> do
-      iDecl <- annInterfaceDecl <|> interfaceDecl
+      iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
       return (InterfaceTypeDecl (iDecl startPos ms))
 
 classDecl :: P (Mod (ClassDecl Parsed), SourcePos)
@@ -202,28 +204,29 @@ normalClassDeclaration = do
   tok KW_Class
   i <- noPos ident
   tps <- typeParameters
-  mex <- extends1
-  imp <- implements
+  mex <- classExtends
+  imp <- classImplements
   (bod, endPos) <- classBody
   return (\pos ms -> ClassDecl (pos, endPos) ms i tps mex imp bod, endPos)
 
-extends1 :: P (Maybe RefType)
-extends1 = optionMaybe (tok KW_Extends >> noPos refType)
+classExtends :: P (Maybe RefType)
+classExtends = optionMaybe (tok KW_Extends >> noPos refType)
 
-extends :: P [RefType]
-extends = NonEmpty.optional (tok KW_Extends >> refTypeList)
+interfaceExtends :: P [RefType]
+interfaceExtends = NonEmpty.optional (tok KW_Extends >> refTypeList)
 
-permits :: P [RefType]
-permits = NonEmpty.optional (fixedIdent "permits" >> refTypeList)
+-- Since Java 17
+classPermits :: P [RefType]
+classPermits = NonEmpty.optional (fixedIdent "permits" >> refTypeList)
 
-implements :: P [RefType]
-implements = NonEmpty.optional (tok KW_Implements >> refTypeList)
+classImplements :: P [RefType]
+classImplements = NonEmpty.optional (tok KW_Implements >> refTypeList)
 
 enumDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 enumDeclaration = do
   tok KW_Enum
   i <- noPos ident
-  imp <- implements
+  imp <- classImplements
   (bod, endPos) <- enumBody
   return (\pos ms -> EnumDecl (pos, endPos) ms i imp bod, endPos)
 
@@ -234,21 +237,21 @@ recordDeclaration = do
   i <- noPos ident
   tps <- typeParameters
   fields <- noPos $ parens $ sepBy recordField comma
-  imp <- implements
+  imp <- classImplements
   (bod, endPos) <- classBody
   return (\pos ms -> RecordDecl (pos, endPos) ms i tps fields imp bod, endPos)
   where
     recordField = RecordFieldDecl <$> ttype <*> noPos ident
 
 classBody :: P (ClassBody Parsed, SourcePos)
-classBody = Bifunctor.first ClassBody <$> braces classBodyStatements
+classBody = Bifunctor.first ClassBody <$> braces classBodyDeclarations
 
 enumBody :: P (EnumBody Parsed, SourcePos)
 enumBody =
   braces $
     EnumBody
       <$> sepEndBy enumConst comma
-      <*> option [] enumBodyDecls
+      <*> option [] enumBodyDeclarations
 
 enumConst :: P (EnumConstant Parsed)
 enumConst =
@@ -257,31 +260,31 @@ enumConst =
     <*> option [] (noPos args)
     <*> optionMaybe (noPos classBody)
 
-enumBodyDecls :: P [Decl Parsed]
-enumBodyDecls = semiColon >> classBodyStatements
+enumBodyDeclarations :: P [Decl Parsed]
+enumBodyDeclarations = semiColon >> classBodyDeclarations
 
-classBodyStatements :: P [Decl Parsed]
-classBodyStatements = manyMaybes classBodyStatement
+classBodyDeclarations :: P [Decl Parsed]
+classBodyDeclarations = manyMaybes classBodyDeclaration
 
 -- Interface declarations
 
-annInterfaceDecl :: P (Mod (InterfaceDecl Parsed))
-annInterfaceDecl = do
+annotationTypeDeclaration :: P (Mod (InterfaceDecl Parsed))
+annotationTypeDeclaration = do
   try (tok Op_AtSign >> tok KW_Interface)
   i <- noPos ident
   tps <- typeParameters
-  exs <- extends
-  ps <- permits
+  exs <- interfaceExtends
+  ps <- classPermits
   (bod, endPos) <- interfaceBody
   return \pos ms -> InterfaceDecl (pos, endPos) InterfaceAnnotation ms i tps exs ps bod
 
-interfaceDecl :: P (Mod (InterfaceDecl Parsed))
-interfaceDecl = do
+normalInterfaceDeclaration :: P (Mod (InterfaceDecl Parsed))
+normalInterfaceDeclaration = do
   tok KW_Interface
   i <- noPos ident
   tps <- typeParameters
-  exs <- extends
-  ps <- permits
+  exs <- interfaceExtends
+  ps <- classPermits
   (bod, endPos) <- interfaceBody
   return \pos ms -> InterfaceDecl (pos, endPos) InterfaceNormal ms i tps exs ps bod
 
@@ -290,10 +293,11 @@ interfaceBody = braces (InterfaceBody <$> manyMaybes interfaceBodyDecl)
 
 -- Declarations
 
-classBodyStatement :: P (Maybe (Decl Parsed))
-classBodyStatement =
+classBodyDeclaration :: P (Maybe (Decl Parsed))
+classBodyDeclaration =
   skipMany1 semiColon $> Nothing
-    <|> try do
+    <|> do
+      try (lookAhead (optional (tok KW_Static) >> tok OpenCurly))
       startPos <- getPosition
       mst <- optionBool (tok KW_Static)
       (bl, endPos) <- block
@@ -301,30 +305,30 @@ classBodyStatement =
     <|> do
       pos <- getPosition
       ms <- many modifier
-      dec <- memberDecl
+      dec <- classMemberDeclaration
       return (Just (MemberDecl (dec pos ms)))
 
-memberDecl :: P (Mod (MemberDecl Parsed))
-memberDecl =
-  try do
+classMemberDeclaration :: P (Mod (MemberDecl Parsed))
+classMemberDeclaration =
+  do
     cd <- noPos classDecl
     return \pos ms -> MemberClassDecl (cd pos ms)
-    <|> try do
-      iDecl <- try annInterfaceDecl <|> try interfaceDecl
+    <|> do
+      iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
       return \pos ms -> MemberInterfaceDecl (iDecl pos ms)
-    <|> try fieldDecl
-    <|> try methodDecl
+    <|> try fieldDeclaration
+    <|> try methodDeclaration
     <|> constrDecl
 
-fieldDecl :: P (Mod (MemberDecl Parsed))
-fieldDecl = do
+fieldDeclaration :: P (Mod (MemberDecl Parsed))
+fieldDeclaration = do
   typ <- ttype
   vds <- varDecls
   endPos <- semiColon
   return \pos ms -> FieldDecl (pos, endPos) ms typ vds
 
-methodDecl :: P (Mod (MemberDecl Parsed))
-methodDecl = do
+methodDeclaration :: P (Mod (MemberDecl Parsed))
+methodDeclaration = do
   tps <- typeParameters
   rt <- resultType
   i <- noPos ident
@@ -336,7 +340,7 @@ methodDecl = do
 methodBody :: P (MethodBody Parsed, SourcePos)
 methodBody = onlySemi <|> fullBody
   where
-    onlySemi = attrTokWithEndPos SemiColon (MethodBody Nothing)
+    onlySemi = (MethodBody Nothing,) <$> semiColon
     fullBody = Bifunctor.first (MethodBody . Just) <$> block
 
 constrDecl :: P (Mod (MemberDecl Parsed))
@@ -394,9 +398,9 @@ interfaceMemberDecl =
     cd <- noPos classDecl
     return \pos ms -> MemberClassDecl (cd pos ms)
     <|> do
-      iDecl <- try annInterfaceDecl <|> try interfaceDecl
+      iDecl <- try annotationTypeDeclaration <|> try normalInterfaceDeclaration
       return \pos ms -> MemberInterfaceDecl (iDecl pos ms)
-    <|> try fieldDecl
+    <|> try fieldDeclaration
     <|> absMethodDecl
 
 absMethodDecl :: P (Mod (MemberDecl Parsed))
