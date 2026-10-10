@@ -25,7 +25,7 @@ module Language.Java.Parser
     varDecl,
     block,
     blockStmt,
-    stmt,
+    statement,
     stmtExp,
     exp,
     primary,
@@ -72,7 +72,6 @@ import Text.Parsec
     getParserState,
     lookAhead,
     many,
-    many1,
     notFollowedBy,
     option,
     optionMaybe,
@@ -356,7 +355,7 @@ constrBody :: P (ConstructorBody Parsed, SourcePos)
 constrBody =
   braces $
     ConstructorBody
-      <$> optionMaybe (try explConstrInv)
+      <$> optionMaybe explConstrInv
       <*> many (noPos blockStmt)
 
 explConstrInv :: P (ExplConstrInv Parsed)
@@ -366,19 +365,24 @@ explConstrInv =
       ( ThisInvoke
           <$> NonEmpty.optional refTypeArgs
           <* tok KW_This
-          <*> noPos args
+          <* lookAhead (tok OpenParen)
       )
+      <*> noPos args
       <|> try
         ( SuperInvoke
             <$> NonEmpty.optional refTypeArgs
             <* tok KW_Super
-            <*> noPos args
+            <* lookAhead (tok OpenParen)
         )
-      <|> PrimarySuperInvoke
-        <$> noPos primary
-        <* period
-        <*> NonEmpty.optional refTypeArgs
-        <* tok KW_Super
+        <*> noPos args
+      <|> try
+        ( PrimarySuperInvoke
+            <$> noPos primary
+            <* period
+            <*> NonEmpty.optional refTypeArgs
+            <* tok KW_Super
+            <* lookAhead (tok OpenParen)
+        )
         <*> noPos args
 
 -- TODO: This should be parsed like class bodies, and post-checked.
@@ -398,7 +402,7 @@ interfaceMemberDecl =
     cd <- noPos classDecl
     return \pos ms -> MemberClassDecl (cd pos ms)
     <|> do
-      iDecl <- try annotationTypeDeclaration <|> try normalInterfaceDeclaration
+      iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
       return \pos ms -> MemberInterfaceDecl (iDecl pos ms)
     <|> try fieldDeclaration
     <|> absMethodDecl
@@ -562,10 +566,10 @@ blockStmt =
     <|> try do
       ((startPos, m, t, vds), endPos) <- endSemi localVarDecl
       return (LocalVars (startPos, endPos) m t vds, endPos)
-    <|> Bifunctor.first BlockStmt <$> stmt
+    <|> Bifunctor.first BlockStmt <$> statement
 
-stmt :: P (Stmt Parsed, SourcePos)
-stmt =
+statement :: P (Stmt Parsed, SourcePos)
+statement =
   ifStmt
     <|> whileStmt
     <|> forStmt
@@ -577,18 +581,18 @@ stmt =
       tok KW_If
       e <- noPos $ parens (noPos exp)
       try do
-        th <- noPos stmtNSI
+        th <- noPos statementNoShortIf
         tok KW_Else
-        (el, endPos) <- stmt
+        (el, endPos) <- statement
         return (IfThenElse (startPos, endPos) e th el, endPos)
         <|> do
-          (th, endPos) <- stmt
+          (th, endPos) <- statement
           return (IfThen (startPos, endPos) e th, endPos)
     whileStmt = do
       startPos <- getPosition
       tok KW_While
       e <- noPos $ parens (noPos exp)
-      (s, endPos) <- stmt
+      (s, endPos) <- statement
       return (While (startPos, endPos) e s, endPos)
     forStmt = do
       startPos <- getPosition
@@ -610,17 +614,16 @@ stmt =
                 void colon
                 e <- noPos exp
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
-      (s, endPos) <- stmt
+      (s, endPos) <- statement
       return (f endPos s, endPos)
-    labeledStmt = try do
+    labeledStmt = do
       startPos <- getPosition
-      lbl <- noPos ident
-      void colon
-      (s, endPos) <- stmt
+      lbl <- try (noPos ident <* colon)
+      (s, endPos) <- statement
       return (Labeled (startPos, endPos) lbl s, endPos)
 
-stmtNSI :: P (Stmt Parsed, SourcePos)
-stmtNSI =
+statementNoShortIf :: P (Stmt Parsed, SourcePos)
+statementNoShortIf =
   ifStmt
     <|> whileStmt
     <|> forStmt
@@ -631,15 +634,15 @@ stmtNSI =
       startPos <- getPosition
       tok KW_If
       e <- noPos $ parens (noPos exp)
-      th <- noPos stmtNSI
+      th <- noPos statementNoShortIf
       tok KW_Else
-      (el, endPos) <- stmtNSI
+      (el, endPos) <- statementNoShortIf
       return (IfThenElse (startPos, endPos) e th el, endPos)
     whileStmt = do
       startPos <- getPosition
       tok KW_While
       e <- noPos $ parens (noPos exp)
-      (s, endPos) <- stmtNSI
+      (s, endPos) <- statementNoShortIf
       return (While (startPos, endPos) e s, endPos)
     forStmt = do
       startPos <- getPosition
@@ -661,13 +664,12 @@ stmtNSI =
                 void colon
                 e <- noPos exp
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
-      (s, endPos) <- stmtNSI
+      (s, endPos) <- statementNoShortIf
       return (f endPos s, endPos)
-    labeledStmt = try do
+    labeledStmt = do
       startPos <- getPosition
-      i <- noPos ident
-      void colon
-      (s, endPos) <- stmtNSI
+      i <- try (noPos ident <* colon)
+      (s, endPos) <- statementNoShortIf
       return (Labeled (startPos, endPos) i s, endPos)
 
 stmtNoTrail :: P (Stmt Parsed, SourcePos)
@@ -699,7 +701,7 @@ stmtNoTrail =
       -- do-while loops
       do
         tok KW_Do
-        s <- noPos stmt
+        s <- noPos statement
         tok KW_While
         e <- noPos $ parens (noPos exp)
         endPos <- semiColon
@@ -801,7 +803,7 @@ switchStmtNew :: P (SwitchBlock Parsed)
 switchStmtNew = do
   startPos <- getPosition
   lbl <- switchLabelNew
-  (bss, pos) <- braces (many (noPos blockStmt)) <|> (blockStmt <&> \s -> ([fst s], snd s))
+  (bss, pos) <- braces (many (noPos blockStmt)) <|> Bifunctor.first pure <$> blockStmt
   return (SwitchBlock (startPos, pos) lbl bss)
 
 switchLabelNew :: P (SwitchLabel Parsed)
@@ -820,12 +822,11 @@ switchExp = do
   (branches, pos) <- braces switchExpBody
   return (SwitchExp (startPos, pos) e branches, pos)
   where
-    switchExpBody = NonEmpty.fromList <$> many1 switchExpBodyBranch
-    switchExpBodyBranch = do
+    switchExpBody = NonEmpty.many do
       lbl <- switchLabelNew
       body <-
-        SwitchExpBranchBlock <$> noPos (braces (many (noPos blockStmt)))
-          <|> SwitchExpBranchBlock <$> try (blockStmt <&> pure . fst)
+        SwitchExpBranchBlock . fst <$> braces (many (noPos blockStmt))
+          <|> SwitchExpBranchBlock . pure . fst <$> try blockStmt
           <|> SwitchExpBranchExp <$> branchExp
       return (SwitchExpBranch lbl body)
     branchExp = noPos exp <* semiColon
@@ -1109,7 +1110,7 @@ lambdaExp = do
   params <- lambdaParams
   tok LambdaArrow
   (e, pos) <-
-    Bifunctor.first LambdaBlock <$> try block
+    Bifunctor.first LambdaBlock <$> block
       <|> Bifunctor.first LambdaExpression <$> exp
   return (Lambda (startPos, pos) params e, pos)
 
