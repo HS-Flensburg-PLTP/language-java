@@ -40,7 +40,6 @@ tokens  :-
     $white+         ;
     @comm           ;
 
-    "@interface"    { plainTok KW_AnnInterface }
     abstract        { plainTok KW_Abstract     }
     assert          { plainTok KW_Assert       }
     boolean         { plainTok KW_Boolean      }
@@ -293,7 +292,6 @@ mkPos (AlexPn _ l c) = (l,c)
 data Token
     -- Keywords
     = KW_Abstract
-    | KW_AnnInterface
     | KW_Assert
     | KW_Boolean
     | KW_Break

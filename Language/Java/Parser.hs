@@ -72,6 +72,7 @@ import Text.Parsec
     getParserState,
     many,
     many1,
+    notFollowedBy,
     option,
     optionMaybe,
     parse,
@@ -151,9 +152,11 @@ compilationUnit =
 
 packageDeclaration :: P (PackageDecl Parsed)
 packageDeclaration =
-  PackageDecl
-    <$> many (Annotation <$> annotation)
-    <* tok KW_Package
+  try
+    ( PackageDecl
+        <$> many (Annotation <$> annotation)
+        <* tok KW_Package
+    )
     <*> noPos name
     <* semiColon
 
@@ -264,7 +267,7 @@ classBodyStatements = manyMaybes classBodyStatement
 
 annInterfaceDecl :: P (Mod (InterfaceDecl Parsed))
 annInterfaceDecl = do
-  tok KW_AnnInterface
+  try (tok Op_AtSign >> tok KW_Interface)
   i <- noPos ident
   tps <- typeParameters
   exs <- extends
@@ -469,7 +472,7 @@ modifier =
 annotation :: P (Annotation Parsed)
 annotation = do
   startPos <- getPosition
-  tok Op_AtSign
+  try (tok Op_AtSign >> notFollowedBy (tok KW_Interface))
   (n, nPos) <- name
   try do
     (elist, endPos) <- parens evlist
