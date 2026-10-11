@@ -1101,6 +1101,16 @@ lambdaExp = do
       <|> Bifunctor.first LambdaExpression <$> expression
   return (Lambda (startPos, pos) params e, pos)
 
+-- TODO: Parse the remaining alternatives of MethodReference.
+-- (JLS 15.13. Method Reference Expressions)
+-- MethodReference
+--   = ExpressionName, "::", [ TypeArguments ], Identifier
+--   | ReferenceType, "::", [ TypeArguments ], Identifier
+--   | Primary, "::", [ TypeArguments ], Identifier
+--   | "super", "::", [ TypeArguments ], Identifier
+--   | TypeName, ".", "super", "::", [ TypeArguments ], Identifier
+--   | ClassType, "::", [ TypeArguments ], "new"
+--   | ArrayType, "::", "new"
 methodReference :: P (Exp Parsed, SourcePos)
 methodReference = do
   startPos <- getPosition
