@@ -660,10 +660,10 @@ data Exp p
     -- | The first argument is a list of non-wildcard type arguments to a generic constructor.
     --   What follows is the type to be instantiated, the list of arguments passed to the constructor, and
     --   optionally a class body that makes the constructor result in an object of an /anonymous/ class.
-    InstanceCreation SourceSpan [TypeArgument] TypeDeclSpecifier [Argument p] (Maybe (ClassBody p))
+    InstanceCreation SourceSpan [RefType] TypeDeclSpecifier [Argument p] (Maybe (ClassBody p))
   | -- | A qualified class instance creation expression enables the creation of instances of inner member classes
     --   and their anonymous subclasses.
-    QualInstanceCreation SourceSpan (Exp p) [TypeArgument] Ident [Argument p] (Maybe (ClassBody p))
+    QualInstanceCreation SourceSpan (Exp p) [RefType] Ident [Argument p] (Maybe (ClassBody p))
   | -- | An array instance creation expression is used to create new arrays. The last argument denotes the number
     --   of dimensions that have no explicit length given. These dimensions must be given last.
     ArrayCreate SourceSpan Type (NonEmpty (Exp p)) Int

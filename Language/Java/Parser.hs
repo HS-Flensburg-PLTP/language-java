@@ -31,12 +31,12 @@ module Language.Java.Parser
     primary,
     literal,
     ttype,
-    primType,
-    refType,
+    primitiveType,
+    referenceType,
     classType,
     resultType,
     lambdaExp,
-    methodRef,
+    methodReference,
     typeParameters,
     typeParameter,
     name,
@@ -207,17 +207,17 @@ normalClassDeclaration = do
   return (\pos ms -> ClassDecl (pos, endPos) ms i tps mex imp bod, endPos)
 
 classExtends :: P (Maybe RefType)
-classExtends = optionMaybe (tok KW_Extends >> noPos refType)
+classExtends = optionMaybe (tok KW_Extends >> noPos referenceType)
 
 interfaceExtends :: P [RefType]
-interfaceExtends = NonEmpty.optional (tok KW_Extends >> refTypeList)
+interfaceExtends = NonEmpty.optional (tok KW_Extends >> referenceTypeList)
 
 -- Since Java 17
 classPermits :: P [RefType]
-classPermits = NonEmpty.optional (fixedIdent "permits" >> refTypeList)
+classPermits = NonEmpty.optional (fixedIdent "permits" >> referenceTypeList)
 
 classImplements :: P [RefType]
-classImplements = NonEmpty.optional (tok KW_Implements >> refTypeList)
+classImplements = NonEmpty.optional (tok KW_Implements >> referenceTypeList)
 
 enumDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 enumDeclaration = do
@@ -361,14 +361,14 @@ explicitConstructorInvocation =
   noPos . endSemi $
     try
       ( ThisInvoke
-          <$> NonEmpty.optional refTypeArgs
+          <$> NonEmpty.optional referenceTypeArguments
           <* tok KW_This
           <* lookAhead (tok OpenParen)
       )
       <*> noPos args
       <|> try
         ( SuperInvoke
-            <$> NonEmpty.optional refTypeArgs
+            <$> NonEmpty.optional referenceTypeArguments
             <* tok KW_Super
             <* lookAhead (tok OpenParen)
         )
@@ -377,7 +377,7 @@ explicitConstructorInvocation =
         ( PrimarySuperInvoke
             <$> noPos primary
             <* period
-            <*> NonEmpty.optional refTypeArgs
+            <*> NonEmpty.optional referenceTypeArguments
             <* tok KW_Super
             <* lookAhead (tok OpenParen)
         )
@@ -420,7 +420,7 @@ defaultValue :: P (Exp Parsed)
 defaultValue = tok KW_Default >> noPos expression
 
 throws :: P [RefType]
-throws = NonEmpty.optional (tok KW_Throws >> refTypeList)
+throws = NonEmpty.optional (tok KW_Throws >> referenceTypeList)
 
 -- Formal parameters
 
@@ -855,7 +855,7 @@ stmtExp =
     -- There are sharing gains to be made by unifying these two
     <|> try methodInvocationExp
     <|> try (noPos lambdaExp)
-    <|> try (noPos methodRef)
+    <|> try (noPos methodReference)
     <|> instanceCreation
 
 preIncDec :: P (Exp Parsed, SourcePos)
@@ -891,7 +891,7 @@ expression = assignExp
 assignExp :: P (Exp Parsed, SourcePos)
 assignExp =
   try switchExpression
-    <|> try methodRef
+    <|> try methodReference
     <|> try lambdaExp
     <|> try assignment
     <|> condExp
@@ -948,7 +948,7 @@ relExp = do
         <|> attrTok Op_GThanE GThanE
   option (e, endPos) do
     tok KW_Instanceof
-    (t, refPos) <- refType
+    (t, refPos) <- referenceType
     (mName, pos) <- optionMaybePos refPos name
     return (InstanceOf (startPos, pos) e t mName, pos)
 
@@ -1038,7 +1038,7 @@ instanceCreationNPS :: P (Exp Parsed, SourcePos)
 instanceCreationNPS = do
   startPos <- getPosition
   tok KW_New
-  tas <- NonEmpty.optional (noPos typeArgs)
+  tas <- NonEmpty.optional referenceTypeArguments
   tds <- typeDeclSpecifier
   (as, argsPos) <- args
   (mcb, pos) <- optionMaybePos argsPos classBody
@@ -1066,7 +1066,7 @@ instanceCreationSuffix :: P (Exp Parsed -> Exp Parsed, SourcePos)
 instanceCreationSuffix = do
   startPos <- getPosition
   period >> tok KW_New
-  tas <- NonEmpty.optional (noPos typeArgs)
+  tas <- NonEmpty.optional referenceTypeArguments
   i <- noPos identifier
   (as, argsPos) <- args
   (mcb, pos) <- optionMaybePos argsPos classBody
@@ -1101,8 +1101,8 @@ lambdaExp = do
       <|> Bifunctor.first LambdaExpression <$> expression
   return (Lambda (startPos, pos) params e, pos)
 
-methodRef :: P (Exp Parsed, SourcePos)
-methodRef = do
+methodReference :: P (Exp Parsed, SourcePos)
+methodReference = do
   startPos <- getPosition
   n <- noPos name
   tok MethodRefSep
@@ -1146,7 +1146,7 @@ methodInvocationNPS = do
   startPos <- getPosition
   do
     tok KW_Super >> void period
-    rts <- NonEmpty.optional refTypeArgs
+    rts <- NonEmpty.optional referenceTypeArguments
     i <- noPos identifier
     (as, pos) <- args
     return (SuperMethodCall (startPos, pos) rts i as, pos)
@@ -1158,7 +1158,7 @@ methodInvocationNPS = do
       n <- noPos name
       void period
       constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
-      rts <- NonEmpty.optional refTypeArgs
+      rts <- NonEmpty.optional referenceTypeArguments
       i <- noPos identifier
       (as, pos) <- args
       return (constr (startPos, pos) n rts i as, pos)
@@ -1176,7 +1176,7 @@ qualifiedMethodName = do
     go endPos nids = do
       (i, pos) <- identifier
       ((i : nids, pos),,)
-        <$> try (period >> refTypeArgs <&> NonEmpty.toList)
+        <$> try (period >> referenceTypeArguments <&> NonEmpty.toList)
         <*> noPos identifier
         <|> try (period >> go pos (i : nids))
         <|> return ((nids, endPos), [], i)
@@ -1185,7 +1185,7 @@ methodInvocationSuffix :: P (Exp Parsed -> MethodInvocation Parsed, SourcePos)
 methodInvocationSuffix = do
   startPos <- getPosition
   void period
-  rts <- NonEmpty.optional refTypeArgs
+  rts <- NonEmpty.optional referenceTypeArguments
   i <- noPos identifier
   (as, pos) <- args
   return (\p -> PrimaryMethodCall (startPos, pos) p rts i as, pos)
@@ -1300,11 +1300,11 @@ assignOp =
 
 ttype :: P Type
 ttype =
-  RefType <$> try (noPos refType)
-    <|> PrimType <$> primType
+  RefType <$> try (noPos referenceType)
+    <|> PrimType <$> primitiveType
 
-primType :: P PrimType
-primType = do
+primitiveType :: P PrimType
+primitiveType = do
   startPos <- getPosition
   (constr, endPos) <-
     attrTokWithEndPos KW_Boolean BooleanT
@@ -1317,11 +1317,11 @@ primType = do
       <|> attrTokWithEndPos KW_Double DoubleT
   return (constr (startPos, endPos))
 
-refType :: P (RefType, SourcePos)
-refType = do
+referenceType :: P (RefType, SourcePos)
+referenceType = do
   startPos <- getPosition
   do
-    pt <- primType
+    pt <- primitiveType
     pos :| bs <- NonEmpty.many emptyBrackets
     return
       ( Bifunctor.first
@@ -1350,7 +1350,7 @@ refType = do
 
 nonArrayType :: P Type
 nonArrayType =
-  PrimType <$> primType
+  PrimType <$> primitiveType
     <|> RefType . ClassRefType <$> noPos classType
 
 classType :: P (ClassType, SourcePos)
@@ -1362,7 +1362,7 @@ classType = do
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
 classTypeSpec = do
   (i, iPos) <- identifier
-  (tas, pos) <- option ([], iPos) (Bifunctor.first NonEmpty.toList <$> typeArgs)
+  (tas, pos) <- option ([], iPos) (Bifunctor.first NonEmpty.toList <$> typeArguments)
   return ((i, tas), pos)
 
 resultType :: P (Maybe Type)
@@ -1371,8 +1371,8 @@ resultType =
     <|> Just <$> ttype
     <?> "resultType"
 
-refTypeList :: P (NonEmpty RefType)
-refTypeList = NonEmpty.sepBy (noPos refType) comma
+referenceTypeList :: P (NonEmpty RefType)
+referenceTypeList = NonEmpty.sepBy (noPos referenceType) comma
 
 ----------------------------------------------------------------------------
 -- Type parameters and arguments
@@ -1388,23 +1388,29 @@ typeParameter =
     <*> NonEmpty.optional bounds
 
 bounds :: P (NonEmpty RefType)
-bounds = tok KW_Extends >> NonEmpty.sepBy (noPos refType) (tok Op_And)
+bounds = tok KW_Extends >> NonEmpty.sepBy (noPos referenceType) (tok Op_And)
 
-typeArgs :: P (NonEmpty TypeArgument, SourcePos)
-typeArgs = angles $ NonEmpty.sepBy typeArg comma
+typeArguments :: P (NonEmpty TypeArgument, SourcePos)
+typeArguments = angles $ NonEmpty.sepBy typeArgument comma
 
-typeArg :: P TypeArgument
-typeArg =
+typeArgument :: P TypeArgument
+typeArgument =
   Wildcard <$ tok Op_Query <*> optionMaybe wildcardBound
-    <|> ActualType <$> noPos refType
+    <|> ActualType <$> noPos referenceType
 
 wildcardBound :: P WildcardBound
 wildcardBound =
-  ExtendsBound <$ tok KW_Extends <*> noPos refType
-    <|> SuperBound <$ tok KW_Super <*> noPos refType
+  ExtendsBound <$ tok KW_Extends <*> noPos referenceType
+    <|> SuperBound <$ tok KW_Super <*> noPos referenceType
 
-refTypeArgs :: P (NonEmpty RefType)
-refTypeArgs = noPos $ angles refTypeList
+-- 8.8.7.1. Explicit Constructor Invocations:
+--     If TypeArguments is present to the left of this or super, then it is a
+--     compile-time error if any of the type arguments are wildcards (§4.5.1).
+-- 15.12. Method Invocation Expressions:
+--     If TypeArguments is present to the left of Identifier, then it is a
+--     compile-time error if any of the type arguments are wildcards (§4.5.1).
+referenceTypeArguments :: P (NonEmpty RefType)
+referenceTypeArguments = noPos $ angles referenceTypeList
 
 ----------------------------------------------------------------------------
 -- Names
