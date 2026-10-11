@@ -15,9 +15,9 @@ module Language.Java.Parser
     classMemberDeclaration,
     fieldDeclaration,
     methodDeclaration,
-    constrDecl,
-    interfaceMemberDecl,
-    absMethodDecl,
+    constructorDeclaration,
+    interfaceMemberDeclaration,
+    interfaceMethodDeclaration,
     formalParams,
     formalParam,
     modifier,
@@ -288,7 +288,7 @@ normalInterfaceDeclaration = do
   return \pos ms -> InterfaceDecl (pos, endPos) InterfaceNormal ms i tps exs ps bod
 
 interfaceBody :: P (InterfaceBody Parsed, SourcePos)
-interfaceBody = braces (InterfaceBody <$> manyMaybes interfaceBodyDecl)
+interfaceBody = braces (InterfaceBody <$> manyMaybes interfaceBodyDeclaration)
 
 -- Declarations
 
@@ -317,7 +317,7 @@ classMemberDeclaration =
       return \pos ms -> MemberInterfaceDecl (iDecl pos ms)
     <|> try fieldDeclaration
     <|> try methodDeclaration
-    <|> constrDecl
+    <|> constructorDeclaration
 
 fieldDeclaration :: P (Mod (MemberDecl Parsed))
 fieldDeclaration = do
@@ -342,24 +342,24 @@ methodBody = onlySemi <|> fullBody
     onlySemi = (MethodBody Nothing,) <$> semiColon
     fullBody = Bifunctor.first (MethodBody . Just) <$> block
 
-constrDecl :: P (Mod (MemberDecl Parsed))
-constrDecl = do
+constructorDeclaration :: P (Mod (MemberDecl Parsed))
+constructorDeclaration = do
   tps <- typeParameters
   i <- noPos identifier
   fps <- option [] formalParams -- record constructors omit the argument list
   thr <- throws
-  (bod, endPos) <- constrBody
+  (bod, endPos) <- constructorBody
   return \pos ms -> ConstructorDecl (pos, endPos) ms tps i fps thr bod
 
-constrBody :: P (ConstructorBody Parsed, SourcePos)
-constrBody =
+constructorBody :: P (ConstructorBody Parsed, SourcePos)
+constructorBody =
   braces $
     ConstructorBody
-      <$> optionMaybe explConstrInv
+      <$> optionMaybe explicitConstructorInvocation
       <*> many (noPos blockStatement)
 
-explConstrInv :: P (ExplConstrInv Parsed)
-explConstrInv =
+explicitConstructorInvocation :: P (ExplConstrInv Parsed)
+explicitConstructorInvocation =
   noPos . endSemi $
     try
       ( ThisInvoke
@@ -387,17 +387,17 @@ explConstrInv =
 
 -- TODO: This should be parsed like class bodies, and post-checked.
 --       That would give far better error messages.
-interfaceBodyDecl :: P (Maybe (MemberDecl Parsed))
-interfaceBodyDecl =
+interfaceBodyDeclaration :: P (Maybe (MemberDecl Parsed))
+interfaceBodyDeclaration =
   semiColon $> Nothing
     <|> do
       pos <- getPosition
       ms <- many modifier
-      imd <- interfaceMemberDecl
+      imd <- interfaceMemberDeclaration
       return $ Just (imd pos ms)
 
-interfaceMemberDecl :: P (Mod (MemberDecl Parsed))
-interfaceMemberDecl =
+interfaceMemberDeclaration :: P (Mod (MemberDecl Parsed))
+interfaceMemberDeclaration =
   do
     cd <- noPos classDeclaration
     return \pos ms -> MemberClassDecl (cd pos ms)
@@ -405,10 +405,10 @@ interfaceMemberDecl =
       iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
       return \pos ms -> MemberInterfaceDecl (iDecl pos ms)
     <|> try fieldDeclaration
-    <|> absMethodDecl
+    <|> interfaceMethodDeclaration
 
-absMethodDecl :: P (Mod (MemberDecl Parsed))
-absMethodDecl = do
+interfaceMethodDeclaration :: P (Mod (MemberDecl Parsed))
+interfaceMethodDeclaration = do
   tps <- typeParameters
   rt <- resultType
   i <- noPos identifier
