@@ -74,7 +74,6 @@ import Text.Parsec
     notFollowedBy,
     option,
     optionMaybe,
-    optional,
     parse,
     sepBy,
     sepEndBy,
@@ -296,9 +295,8 @@ classBodyDeclaration :: P (Maybe (Decl Parsed))
 classBodyDeclaration =
   skipMany1 semiColon $> Nothing
     <|> do
-      try (lookAhead (optional (tok KW_Static) >> tok OpenCurly))
       startPos <- getPosition
-      mst <- optionBool (tok KW_Static)
+      mst <- try (optionBool (tok KW_Static) <* lookAhead (tok OpenCurly))
       (bl, endPos) <- block
       return (Just (InitDecl (startPos, endPos) mst bl))
     <|> do
