@@ -35,7 +35,7 @@ module Language.Java.Parser
     referenceType,
     classType,
     resultType,
-    lambdaExp,
+    lambdaExpression,
     methodReference,
     typeParameters,
     typeParameter,
@@ -255,7 +255,7 @@ enumConstant =
   EnumConstant
     <$> many (Annotation <$> annotation)
     <*> noPos identifier
-    <*> option [] (noPos args)
+    <*> option [] (noPos argumentList)
     <*> optionMaybe (noPos classBody)
 
 enumBodyDeclarations :: P [Decl Parsed]
@@ -365,14 +365,14 @@ explicitConstructorInvocation =
           <* tok KW_This
           <* lookAhead (tok OpenParen)
       )
-      <*> noPos args
+      <*> noPos argumentList
       <|> try
         ( SuperInvoke
             <$> NonEmpty.optional referenceTypeArguments
             <* tok KW_Super
             <* lookAhead (tok OpenParen)
         )
-        <*> noPos args
+        <*> noPos argumentList
       <|> try
         ( PrimarySuperInvoke
             <$> noPos primary
@@ -381,7 +381,7 @@ explicitConstructorInvocation =
             <* tok KW_Super
             <* lookAhead (tok OpenParen)
         )
-        <*> noPos args
+        <*> noPos argumentList
 
 -- TODO: This should be parsed like class bodies, and post-checked.
 --       That would give far better error messages.
@@ -854,14 +854,14 @@ stmtExp =
     <|> try (noPos assignment)
     -- There are sharing gains to be made by unifying these two
     <|> try methodInvocationExp
-    <|> try (noPos lambdaExp)
+    <|> try (noPos lambdaExpression)
     <|> try (noPos methodReference)
     <|> instanceCreation
 
 preIncDec :: P (Exp Parsed, SourcePos)
 preIncDec = do
   op <- noPos preIncDecOp
-  (e, ePos) <- unaryExp
+  (e, ePos) <- unaryExpression
   return (op ePos e, ePos)
 
 postIncDec :: P (Exp Parsed)
@@ -892,7 +892,7 @@ assignExp :: P (Exp Parsed, SourcePos)
 assignExp =
   try switchExpression
     <|> try methodReference
-    <|> try lambdaExp
+    <|> try lambdaExpression
     <|> try assignment
     <|> condExp
 
@@ -941,7 +941,7 @@ relExp :: P (Exp Parsed, SourcePos)
 relExp = do
   startPos <- getPosition
   (e, endPos) <-
-    infixlExpList shiftExp $
+    infixlExpList shiftExpression $
       attrTok Op_LThan LThan
         <|> attrTok Op_GThan GThan
         <|> attrTok Op_LThanE LThanE
@@ -952,37 +952,37 @@ relExp = do
     (mName, pos) <- optionMaybePos refPos name
     return (InstanceOf (startPos, pos) e t mName, pos)
 
-shiftExp :: P (Exp Parsed, SourcePos)
-shiftExp =
-  infixlExpList addExp $
+shiftExpression :: P (Exp Parsed, SourcePos)
+shiftExpression =
+  infixlExpList additiveExpression $
     attrTok Op_LShift LShift
       <|> try (tok Op_GThan >> tok Op_GThan >> tok Op_GThan $> RRShift)
       <|> try (tok Op_GThan >> tok Op_GThan $> RShift)
 
-addExp :: P (Exp Parsed, SourcePos)
-addExp =
-  infixlExpList mulExp $
+additiveExpression :: P (Exp Parsed, SourcePos)
+additiveExpression =
+  infixlExpList multiplicativeExpression $
     attrTok Op_Plus Add
       <|> attrTok Op_Minus Sub
 
-mulExp :: P (Exp Parsed, SourcePos)
-mulExp =
-  infixlExpList unaryExp $
+multiplicativeExpression :: P (Exp Parsed, SourcePos)
+multiplicativeExpression =
+  infixlExpList unaryExpression $
     attrTok Op_Star Mult
       <|> attrTok Op_Slash Div
       <|> attrTok Op_Percent Rem
 
-unaryExp :: P (Exp Parsed, SourcePos)
-unaryExp =
+unaryExpression :: P (Exp Parsed, SourcePos)
+unaryExpression =
   try preIncDec
     <|> try do
       op <- noPos prefixOp
-      (e, ePos) <- unaryExp
+      (e, ePos) <- unaryExpression
       return (op ePos e, ePos)
     <|> try do
       startPos <- getPosition
       t <- noPos (parens ttype)
-      (e, pos) <- unaryExp
+      (e, pos) <- unaryExpression
       return (Cast (startPos, pos) t e, pos)
     <|> postfixExp
 
@@ -1040,7 +1040,7 @@ instanceCreationNPS = do
   tok KW_New
   tas <- NonEmpty.optional referenceTypeArguments
   tds <- typeDeclSpecifier
-  (as, argsPos) <- args
+  (as, argsPos) <- argumentList
   (mcb, pos) <- optionMaybePos argsPos classBody
   return (InstanceCreation (startPos, pos) tas tds as mcb, pos)
 
@@ -1068,7 +1068,7 @@ instanceCreationSuffix = do
   period >> tok KW_New
   tas <- NonEmpty.optional referenceTypeArguments
   i <- noPos identifier
-  (as, argsPos) <- args
+  (as, argsPos) <- argumentList
   (mcb, pos) <- optionMaybePos argsPos classBody
   return (\p -> QualInstanceCreation (startPos, pos) p tas i as mcb, pos)
 
@@ -1082,8 +1082,8 @@ instanceCreation =
           icp@QualInstanceCreation {} -> return icp
           _ -> fail ""
 
-lambdaParams :: P (LambdaParams Parsed)
-lambdaParams =
+lambdaParameters :: P (LambdaParams Parsed)
+lambdaParameters =
   LambdaSingleParam <$> noPos identifier
     <|> noPos
       ( parens $
@@ -1091,10 +1091,10 @@ lambdaParams =
             <|> LambdaInferredParams <$> sepBy (noPos identifier) comma
       )
 
-lambdaExp :: P (Exp Parsed, SourcePos)
-lambdaExp = do
+lambdaExpression :: P (Exp Parsed, SourcePos)
+lambdaExpression = do
   startPos <- getPosition
-  params <- lambdaParams
+  params <- lambdaParameters
   tok LambdaArrow
   (e, pos) <-
     Bifunctor.first LambdaBlock <$> block
@@ -1158,11 +1158,11 @@ methodInvocationNPS = do
     tok KW_Super >> void period
     rts <- NonEmpty.optional referenceTypeArguments
     i <- noPos identifier
-    (as, pos) <- args
+    (as, pos) <- argumentList
     return (SuperMethodCall (startPos, pos) rts i as, pos)
     <|> do
       (mn, rts, i) <- qualifiedMethodName
-      (as, pos) <- args
+      (as, pos) <- argumentList
       return (MethodCall (startPos, pos) mn rts i as, pos)
     <|> do
       n <- noPos name
@@ -1170,7 +1170,7 @@ methodInvocationNPS = do
       constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
       rts <- NonEmpty.optional referenceTypeArguments
       i <- noPos identifier
-      (as, pos) <- args
+      (as, pos) <- argumentList
       return (constr (startPos, pos) n rts i as, pos)
 
 qualifiedMethodName :: P (Maybe Name, [RefType], Ident)
@@ -1197,7 +1197,7 @@ methodInvocationSuffix = do
   void period
   rts <- NonEmpty.optional referenceTypeArguments
   i <- noPos identifier
-  (as, pos) <- args
+  (as, pos) <- argumentList
   return (\p -> PrimaryMethodCall (startPos, pos) p rts i as, pos)
 
 methodInvocationExp :: P (Exp Parsed)
@@ -1210,8 +1210,8 @@ methodInvocationExp =
         _ -> fail ""
     <|> MethodInv <$> noPos methodInvocationNPS
 
-args :: P ([Argument Parsed], SourcePos)
-args = parens (sepBy (noPos expression) comma)
+argumentList :: P ([Argument Parsed], SourcePos)
+argumentList = parens (sepBy (noPos expression) comma)
 
 -- Arrays
 
