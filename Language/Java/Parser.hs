@@ -24,7 +24,7 @@ module Language.Java.Parser
     variableDeclarators,
     variableDeclarator,
     block,
-    blockStmt,
+    blockStatement,
     statement,
     stmtExp,
     expression,
@@ -58,7 +58,6 @@ import qualified Data.Bifunctor as Bifunctor
 import Data.Foldable (Foldable (foldl'))
 import Data.Function ((&))
 import Data.Functor (void, ($>), (<&>))
-import Data.List (unsnoc)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Language.Java.Lexer (L1 (..), Token (..), lexer)
@@ -356,7 +355,7 @@ constrBody =
   braces $
     ConstructorBody
       <$> optionMaybe explConstrInv
-      <*> many (noPos blockStmt)
+      <*> many (noPos blockStatement)
 
 explConstrInv :: P (ExplConstrInv Parsed)
 explConstrInv =
@@ -498,12 +497,9 @@ elementValuePair = (,) <$> noPos identifier <* tok Op_Equal <*> elementValue
 
 elementValue :: P (ElementValue Parsed)
 elementValue =
-  EVVal
-    <$> ( InitArray <$> noPos arrayInit
-            <|> InitExp <$> noPos condExp
-        )
-    <|> EVAnn
-      <$> annotation
+  EVVal . InitArray <$> noPos arrayInitializer
+    <|> EVVal . InitExp <$> noPos condExp
+    <|> EVAnn <$> annotation
 
 ----------------------------------------------------------------------------
 -- Variable declarations
@@ -523,13 +519,11 @@ variableDeclaratorId = do
   startPos <- getPosition
   (i, noArrPos) <- identifier
   ebs <- many emptyBrackets
-  let endPos = case ebs of
-        [] -> noArrPos
-        _ -> last ebs
+  let endPos = NonEmpty.last (noArrPos :| ebs)
   return (foldl' (\f pos -> VarDeclArray (startPos, pos) . f) VarId ebs i, endPos)
 
-localVarDecl :: P (SourcePos, [Modifier Parsed], Type, NonEmpty (VarDecl Parsed))
-localVarDecl =
+localVariableDeclaration :: P (SourcePos, [Modifier Parsed], Type, NonEmpty (VarDecl Parsed))
+localVariableDeclaration =
   (,,,)
     <$> getPosition
     <*> many modifier
@@ -538,11 +532,11 @@ localVarDecl =
 
 variableInitializer :: P (VarInit Parsed, SourcePos)
 variableInitializer =
-  Bifunctor.first InitArray <$> arrayInit
+  Bifunctor.first InitArray <$> arrayInitializer
     <|> Bifunctor.first InitExp <$> expression
 
-arrayInit :: P (ArrayInit Parsed, SourcePos)
-arrayInit = braces do
+arrayInitializer :: P (ArrayInit Parsed, SourcePos)
+arrayInitializer = braces do
   startPos <- getPosition
   (vis, visPos) <- sepEndByPos variableInitializer comma
   return (ArrayInit (startPos, visPos) vis)
@@ -553,30 +547,33 @@ arrayInit = braces do
 block :: P (Block Parsed, SourcePos)
 block = do
   startPos <- getPosition
-  (bs, pos) <- braces (many (noPos blockStmt))
+  (bs, pos) <- braces (NonEmpty.optional (noPos blockStatements))
   return (Block (startPos, pos) bs, pos)
 
-blockStmt :: P (BlockStmt Parsed, SourcePos)
-blockStmt =
+blockStatements :: P (NonEmpty (BlockStmt Parsed), SourcePos)
+blockStatements = manyNonEmptyPos blockStatement
+
+blockStatement :: P (BlockStmt Parsed, SourcePos)
+blockStatement =
   try do
     pos <- getPosition
     ms <- many modifier
     (cd, endPos) <- classDecl
     return (LocalClass (cd pos ms), endPos)
     <|> try do
-      ((startPos, m, t, vds), endPos) <- endSemi localVarDecl
+      ((startPos, m, t, vds), endPos) <- endSemi localVariableDeclaration
       return (LocalVars (startPos, endPos) m t vds, endPos)
     <|> Bifunctor.first BlockStmt <$> statement
 
 statement :: P (Stmt Parsed, SourcePos)
 statement =
-  ifStmt
-    <|> whileStmt
-    <|> forStmt
-    <|> labeledStmt
-    <|> stmtNoTrail
+  ifStatement
+    <|> whileStatement
+    <|> forStatement
+    <|> labeledStatement
+    <|> statementWithoutTrailingSubstatement
   where
-    ifStmt = do
+    ifStatement = do
       startPos <- getPosition
       tok KW_If
       e <- noPos $ parens (noPos expression)
@@ -588,13 +585,13 @@ statement =
         <|> do
           (th, endPos) <- statement
           return (IfThen (startPos, endPos) e th, endPos)
-    whileStmt = do
+    whileStatement = do
       startPos <- getPosition
       tok KW_While
       e <- noPos $ parens (noPos expression)
       (s, endPos) <- statement
       return (While (startPos, endPos) e s, endPos)
-    forStmt = do
+    forStatement = do
       startPos <- getPosition
       tok KW_For
       f <-
@@ -616,7 +613,7 @@ statement =
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
       (s, endPos) <- statement
       return (f endPos s, endPos)
-    labeledStmt = do
+    labeledStatement = do
       startPos <- getPosition
       lbl <- try (noPos identifier <* colon)
       (s, endPos) <- statement
@@ -624,13 +621,13 @@ statement =
 
 statementNoShortIf :: P (Stmt Parsed, SourcePos)
 statementNoShortIf =
-  ifStmt
-    <|> whileStmt
-    <|> forStmt
-    <|> labeledStmt
-    <|> stmtNoTrail
+  ifThenElseStatementNoShortIf
+    <|> whileStatementNoShortIf
+    <|> forStatementNoShortIf
+    <|> labeledStatementNoShortIf
+    <|> statementWithoutTrailingSubstatement
   where
-    ifStmt = do
+    ifThenElseStatementNoShortIf = do
       startPos <- getPosition
       tok KW_If
       e <- noPos $ parens (noPos expression)
@@ -638,13 +635,13 @@ statementNoShortIf =
       tok KW_Else
       (el, endPos) <- statementNoShortIf
       return (IfThenElse (startPos, endPos) e th el, endPos)
-    whileStmt = do
+    whileStatementNoShortIf = do
       startPos <- getPosition
       tok KW_While
       e <- noPos $ parens (noPos expression)
       (s, endPos) <- statementNoShortIf
       return (While (startPos, endPos) e s, endPos)
-    forStmt = do
+    forStatementNoShortIf = do
       startPos <- getPosition
       tok KW_For
       f <-
@@ -666,14 +663,14 @@ statementNoShortIf =
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
       (s, endPos) <- statementNoShortIf
       return (f endPos s, endPos)
-    labeledStmt = do
+    labeledStatementNoShortIf = do
       startPos <- getPosition
       i <- try (noPos identifier <* colon)
       (s, endPos) <- statementNoShortIf
       return (Labeled (startPos, endPos) i s, endPos)
 
-stmtNoTrail :: P (Stmt Parsed, SourcePos)
-stmtNoTrail =
+statementWithoutTrailingSubstatement :: P (Stmt Parsed, SourcePos)
+statementWithoutTrailingSubstatement =
   getPosition >>= \startPos ->
     -- empty statement
     do
@@ -747,13 +744,12 @@ stmtNoTrail =
         tok KW_Try
         resources <- tryResourceList
         (b, blockEndPos) <- block
-        cs <- many catch
-        let cEndPos = maybe blockEndPos (snd . snd) (unsnoc cs)
+        (cs, cEndPos) <- manyPos blockEndPos catch
         (mf, endPos) <- optionMaybePos cEndPos (tok KW_Finally >> block)
         when (null resources && null cs && null mf) $
           fail "try needs at least one catch or finally clause"
         return
-          ( Try (startPos, endPos) resources b (map fst cs) mf,
+          ( Try (startPos, endPos) resources b cs mf,
             endPos
           )
       <|>
@@ -767,7 +763,7 @@ stmtNoTrail =
 forInit :: P (ForInit Parsed)
 forInit =
   try do
-    (_, m, t, vds) <- localVarDecl
+    (_, m, t, vds) <- localVariableDeclaration
     return (ForLocalVars m t vds)
     <|> ForInitExps <$> NonEmpty.sepBy stmtExp comma
 
@@ -786,9 +782,7 @@ switchStmtOld :: P (SwitchBlock Parsed)
 switchStmtOld = do
   startPos <- getPosition
   (lbl, lblPos) <- switchLabelOld
-  bswithLocs <- many blockStmt
-  let bss = map fst bswithLocs
-      pos = maybe lblPos (snd . snd) (unsnoc bswithLocs)
+  (bss, pos) <- manyPos lblPos blockStatement
   return (SwitchBlock (startPos, pos) lbl bss)
 
 switchLabelOld :: P (SwitchLabel Parsed, SourcePos)
@@ -803,7 +797,7 @@ switchStmtNew :: P (SwitchBlock Parsed)
 switchStmtNew = do
   startPos <- getPosition
   lbl <- switchLabelNew
-  (bss, pos) <- braces (many (noPos blockStmt)) <|> Bifunctor.first pure <$> blockStmt
+  (bss, pos) <- braces (many (noPos blockStatement)) <|> Bifunctor.first pure <$> blockStatement
   return (SwitchBlock (startPos, pos) lbl bss)
 
 switchLabelNew :: P (SwitchLabel Parsed)
@@ -825,8 +819,8 @@ switchExp = do
     switchExpBody = NonEmpty.many do
       lbl <- switchLabelNew
       body <-
-        SwitchExpBranchBlock . fst <$> braces (many (noPos blockStmt))
-          <|> SwitchExpBranchBlock . pure . fst <$> try blockStmt
+        SwitchExpBranchBlock . fst <$> braces (many (noPos blockStatement))
+          <|> SwitchExpBranchBlock . pure . fst <$> try blockStatement
           <|> SwitchExpBranchExp <$> branchExp
       return (SwitchExpBranch lbl body)
     branchExp = noPos expression <* semiColon
@@ -1245,16 +1239,13 @@ arrayCreation = do
   t <- nonArrayType
   try do
     ds <- NonEmpty.many emptyBrackets
-    (ai, pos) <- arrayInit
+    (ai, pos) <- arrayInitializer
     return (ArrayCreateInit (startPos, pos) t (length ds) ai, pos)
     <|> do
       (des, desPos) <- manyNonEmptyPos $ try $ brackets (noPos expression)
       ds <- many emptyBrackets
       let len = length ds
-          pos =
-            if len < 1
-              then desPos
-              else last ds
+          pos = NonEmpty.last (desPos :| ds)
       return (ArrayCreate (startPos, pos) t des len, pos)
 
 literal :: P (Literal, SourcePos)
@@ -1458,6 +1449,9 @@ manyNonEmptyPos :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
 manyNonEmptyPos p =
   NonEmpty.many p
     <&> \ll -> (NonEmpty.map fst ll, snd (NonEmpty.last ll))
+
+manyPos :: SourcePos -> P (a, SourcePos) -> P ([a], SourcePos)
+manyPos pos p = option ([], pos) (Bifunctor.first NonEmpty.toList <$> manyNonEmptyPos p)
 
 sepByNonEmptyPos :: P (a, SourcePos) -> P sep -> P (NonEmpty a, SourcePos)
 sepByNonEmptyPos p sep = NonEmpty.sepBy p sep <&> \l -> (NonEmpty.map fst l, snd (NonEmpty.last l))
