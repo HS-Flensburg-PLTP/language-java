@@ -10,7 +10,7 @@ module Language.Java.Parser
     packageDeclaration,
     importDeclaration,
     typeDeclaration,
-    classDecl,
+    classDeclaration,
     normalInterfaceDeclaration,
     classMemberDeclaration,
     fieldDeclaration,
@@ -172,7 +172,7 @@ importDeclaration = do
 
 typeDeclaration :: P (Maybe (TypeDecl Parsed))
 typeDeclaration =
-  Just <$> classOrInterfaceDecl
+  Just <$> classOrInterfaceDeclaration
     <|> Nothing <$ semiColon
 
 ----------------------------------------------------------------------------
@@ -180,19 +180,19 @@ typeDeclaration =
 
 -- Class declarations
 
-classOrInterfaceDecl :: P (TypeDecl Parsed)
-classOrInterfaceDecl = do
+classOrInterfaceDeclaration :: P (TypeDecl Parsed)
+classOrInterfaceDeclaration = do
   startPos <- getPosition
   ms <- many modifier
   do
-    cd <- noPos classDecl
+    cd <- noPos classDeclaration
     return (ClassTypeDecl (cd startPos ms))
     <|> do
       iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
       return (InterfaceTypeDecl (iDecl startPos ms))
 
-classDecl :: P (Mod (ClassDecl Parsed), SourcePos)
-classDecl =
+classDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
+classDeclaration =
   normalClassDeclaration
     <|> recordDeclaration
     <|> enumDeclaration
@@ -248,13 +248,14 @@ enumBody :: P (EnumBody Parsed, SourcePos)
 enumBody =
   braces $
     EnumBody
-      <$> sepEndBy enumConst comma
+      <$> sepEndBy enumConstant comma
       <*> option [] enumBodyDeclarations
 
-enumConst :: P (EnumConstant Parsed)
-enumConst =
+enumConstant :: P (EnumConstant Parsed)
+enumConstant =
   EnumConstant
-    <$> noPos identifier
+    <$> many (Annotation <$> annotation)
+    <*> noPos identifier
     <*> option [] (noPos args)
     <*> optionMaybe (noPos classBody)
 
@@ -309,7 +310,7 @@ classBodyDeclaration =
 classMemberDeclaration :: P (Mod (MemberDecl Parsed))
 classMemberDeclaration =
   do
-    cd <- noPos classDecl
+    cd <- noPos classDeclaration
     return \pos ms -> MemberClassDecl (cd pos ms)
     <|> do
       iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
@@ -398,7 +399,7 @@ interfaceBodyDecl =
 interfaceMemberDecl :: P (Mod (MemberDecl Parsed))
 interfaceMemberDecl =
   do
-    cd <- noPos classDecl
+    cd <- noPos classDeclaration
     return \pos ms -> MemberClassDecl (cd pos ms)
     <|> do
       iDecl <- annotationTypeDeclaration <|> normalInterfaceDeclaration
@@ -558,7 +559,7 @@ blockStatement =
   try do
     pos <- getPosition
     ms <- many modifier
-    (cd, endPos) <- classDecl
+    (cd, endPos) <- classDeclaration
     return (LocalClass (cd pos ms), endPos)
     <|> try do
       ((startPos, m, t, vds), endPos) <- endSemi localVariableDeclaration

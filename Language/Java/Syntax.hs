@@ -188,7 +188,7 @@ data EnumBody p = EnumBody [EnumConstant p] [Decl p]
   deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | An enum constant defines an instance of the enum type.
-data EnumConstant p = EnumConstant Ident [Argument p] (Maybe (ClassBody p))
+data EnumConstant p = EnumConstant [Modifier p] Ident [Argument p] (Maybe (ClassBody p))
   deriving (Typeable, Generic, Show, Data, Eq)
 
 -- | An interface declaration introduces a new reference type whose members

@@ -109,8 +109,9 @@ instance (PrettyExtension p) => Pretty (EnumBody p) where
         : map (prettyPrec p) ds
 
 instance (PrettyExtension p) => Pretty (EnumConstant p) where
-  prettyPrec p (EnumConstant ident args mBody) =
-    prettyPrec p ident
+  prettyPrec p (EnumConstant mods ident args mBody) =
+    hsep (map (prettyPrec p) mods)
+      <+> prettyPrec p ident
       -- needs special treatment since even the parens are optional
       <> opt (not $ null args) (ppArgs p args)
       $$ maybePP p mBody

@@ -160,7 +160,7 @@ instance AnalyzedTransformer ClassDecl where
   transformToAnalyzed scope (EnumDecl src modifiers idnt refTypes enumBody@(EnumBody cons decls)) =
     let newScope =
           ( IdentCollection.addToClassInfos (map ClassInfo.fromClassDecl (mapMaybe Decl.classDecl decls))
-              . IdentCollection.addToFields (concat (mapMaybe Decl.fieldIdents decls) ++ map (\(EnumConstant idnt' _ _) -> idnt') cons)
+              . IdentCollection.addToFields (concat (mapMaybe Decl.fieldIdents decls) ++ map (\(EnumConstant _ idnt' _ _) -> idnt') cons)
           )
             scope
      in EnumDecl
@@ -318,7 +318,12 @@ instance AnalyzedTransformer Decl where
   transformToAnalyzed scope (InitDecl srcspan static block) = InitDecl srcspan static (transformToAnalyzed scope block)
 
 instance AnalyzedTransformer EnumConstant where
-  transformToAnalyzed scope (EnumConstant idnt arguments mbClassBody) = EnumConstant idnt (transformListToAnalyzed scope arguments) (fmap (transformToAnalyzed scope) mbClassBody)
+  transformToAnalyzed scope (EnumConstant modifiers idnt arguments mbClassBody) =
+    EnumConstant
+      (transformListToAnalyzed scope modifiers)
+      idnt
+      (transformListToAnalyzed scope arguments)
+      (fmap (transformToAnalyzed scope) mbClassBody)
 
 instance AnalyzedTransformer VarInit where
   transformToAnalyzed scope (InitExp expr) = InitExp (transformToAnalyzed scope expr)

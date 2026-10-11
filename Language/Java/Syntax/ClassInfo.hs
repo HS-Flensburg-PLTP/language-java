@@ -38,6 +38,6 @@ fromClassDecl (RecordDecl _ _ idnt _ _ _ (ClassBody decls)) =
     idnt
 fromClassDecl (EnumDecl _ _ idnt _ (EnumBody cons decls)) =
   ClassInfo
-    ((concat . mapMaybe Decl.fieldIdents) decls ++ map (\(EnumConstant idnt' _ _) -> idnt') cons)
+    ((concat . mapMaybe Decl.fieldIdents) decls ++ map (\(EnumConstant _ idnt' _ _) -> idnt') cons)
     (map fromClassDecl (mapMaybe Decl.classDecl decls))
     idnt
