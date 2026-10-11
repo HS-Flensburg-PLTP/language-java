@@ -774,41 +774,34 @@ forUp = sepBy stmtExp comma
 switchBlock :: P ((SwitchStyle, [SwitchBlock Parsed]), SourcePos)
 switchBlock = braces (try old <|> new)
   where
-    old = (SwitchOldStyle,) <$> many switchStmtOld
-    new = (SwitchNewStyle,) <$> many switchStmtNew
+    old = (SwitchOldStyle,) <$> many switchBlockStatement
+    new = (SwitchNewStyle,) <$> many switchRule
 
-switchStmtOld :: P (SwitchBlock Parsed)
-switchStmtOld = do
+switchBlockStatement :: P (SwitchBlock Parsed)
+switchBlockStatement = do
   startPos <- getPosition
-  (lbl, lblPos) <- switchLabelOld
+  lbl <- switchLabel
+  lblPos <- colon
   (bss, pos) <- manyPos lblPos blockStatement
   return (SwitchBlock (startPos, pos) lbl bss)
 
-switchLabelOld :: P (SwitchLabel Parsed, SourcePos)
-switchLabelOld =
-  tok KW_Default >> attrTokWithEndPos Op_Colon Default
-    <|> SwitchCase
-      <$ tok KW_Case
-      <*> NonEmpty.sepBy (noPos condExp) comma
-        >>= attrTokWithEndPos Op_Colon
-
-switchStmtNew :: P (SwitchBlock Parsed)
-switchStmtNew = do
+-- Since Java 14
+switchRule :: P (SwitchBlock Parsed)
+switchRule = do
   startPos <- getPosition
-  lbl <- switchLabelNew
+  lbl <- switchLabel
+  tok LambdaArrow
   (bss, pos) <- braces (many (noPos blockStatement)) <|> Bifunctor.first pure <$> blockStatement
   return (SwitchBlock (startPos, pos) lbl bss)
 
-switchLabelNew :: P (SwitchLabel Parsed)
-switchLabelNew =
-  SwitchCase
-    <$ tok KW_Case
-    <*> NonEmpty.sepBy (noPos condExp) comma
-    <* tok LambdaArrow
-    <|> Default <$ tok KW_Default <* tok LambdaArrow
+switchLabel :: P (SwitchLabel Parsed)
+switchLabel =
+  SwitchCase <$ tok KW_Case <*> NonEmpty.sepBy (noPos condExp) comma
+    <|> Default <$ tok KW_Default
 
-switchExp :: P (Exp Parsed, SourcePos)
-switchExp = do
+-- Since Java 14
+switchExpression :: P (Exp Parsed, SourcePos)
+switchExpression = do
   startPos <- getPosition
   tok KW_Switch
   e <- noPos $ parens (noPos expression)
@@ -816,7 +809,8 @@ switchExp = do
   return (SwitchExp (startPos, pos) e branches, pos)
   where
     switchExpBody = NonEmpty.many do
-      lbl <- switchLabelNew
+      lbl <- switchLabel
+      tok LambdaArrow
       body <-
         SwitchExpBranchBlock . fst <$> braces (many (noPos blockStatement))
           <|> SwitchExpBranchBlock . pure . fst <$> try blockStatement
@@ -896,7 +890,7 @@ expression = assignExp
 
 assignExp :: P (Exp Parsed, SourcePos)
 assignExp =
-  try switchExp
+  try switchExpression
     <|> try methodRef
     <|> try lambdaExp
     <|> try assignment
