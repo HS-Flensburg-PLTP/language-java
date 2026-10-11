@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Language.Java.Transformer (transformCompilationUnitToAnalyzed) where
 
