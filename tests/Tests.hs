@@ -18,7 +18,6 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import TransformerTests (allTransformerTests)
-import Prelude hiding (exp)
 
 instance Arbitrary (CompilationUnit p) where
   arbitrary = CompilationUnit <$> arbitrary <*> arbitrary <*> ((: []) <$> arbitrary)
@@ -194,8 +193,8 @@ main = do
               Left perr -> error (show (pretty g) ++ show perr)
           ),
         testProperty
-          "parsing.generating==id (exp)"
-          ( \g -> case parser (fst <$> exp) "<input>" (show $ pretty g) of
+          "parsing.generating==id (expression)"
+          ( \g -> case parser (fst <$> expression) "<input>" (show $ pretty g) of
               Right g' -> counterexample (show $ pretty g) $ counterexample (show g') $ g == g'
               Left perr -> error (show (pretty g) ++ show perr)
           ),

@@ -1,13 +1,12 @@
 module BinOpTests where
 
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Java.Parser (exp, parser)
+import Language.Java.Parser (expression, parser)
 import Language.Java.Pretty (Pretty (pretty))
 import Language.Java.SourceSpan
 import Language.Java.Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (HasCallStack, assertFailure, testCaseInfo, (@?))
-import Prelude hiding (exp)
 
 testBinOp :: [TestTree]
 testBinOp =
@@ -60,7 +59,7 @@ testBinOp =
 
 testRoundTrip :: (HasCallStack) => Exp Parsed -> TestTree
 testRoundTrip e = testCaseInfo (prettyExplicit e) $
-  case parser exp "" (show (pretty e)) of
+  case parser expression "" (show (pretty e)) of
     Left err -> assertFailure (show err)
     Right (e', _) -> do
       e == e' @? "pretty-printed (" ++ show (pretty e) ++ ") reparsed as " ++ prettyExplicit e'

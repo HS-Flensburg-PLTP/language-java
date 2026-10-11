@@ -21,13 +21,13 @@ module Language.Java.Parser
     formalParams,
     formalParam,
     modifier,
-    varDecls,
-    varDecl,
+    variableDeclarators,
+    variableDeclarator,
     block,
     blockStmt,
     statement,
     stmtExp,
-    exp,
+    expression,
     primary,
     literal,
     ttype,
@@ -40,7 +40,7 @@ module Language.Java.Parser
     typeParameters,
     typeParameter,
     name,
-    ident,
+    identifier,
     manyNonEmptyPos,
     sepByNonEmptyPos,
     sepEndByPos,
@@ -201,7 +201,7 @@ classDecl =
 normalClassDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 normalClassDeclaration = do
   tok KW_Class
-  i <- noPos ident
+  i <- noPos identifier
   tps <- typeParameters
   mex <- classExtends
   imp <- classImplements
@@ -224,7 +224,7 @@ classImplements = NonEmpty.optional (tok KW_Implements >> refTypeList)
 enumDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 enumDeclaration = do
   tok KW_Enum
-  i <- noPos ident
+  i <- noPos identifier
   imp <- classImplements
   (bod, endPos) <- enumBody
   return (\pos ms -> EnumDecl (pos, endPos) ms i imp bod, endPos)
@@ -233,14 +233,14 @@ enumDeclaration = do
 recordDeclaration :: P (Mod (ClassDecl Parsed), SourcePos)
 recordDeclaration = do
   tok KW_Record
-  i <- noPos ident
+  i <- noPos identifier
   tps <- typeParameters
   fields <- noPos $ parens $ sepBy recordField comma
   imp <- classImplements
   (bod, endPos) <- classBody
   return (\pos ms -> RecordDecl (pos, endPos) ms i tps fields imp bod, endPos)
   where
-    recordField = RecordFieldDecl <$> ttype <*> noPos ident
+    recordField = RecordFieldDecl <$> ttype <*> noPos identifier
 
 classBody :: P (ClassBody Parsed, SourcePos)
 classBody = Bifunctor.first ClassBody <$> braces classBodyDeclarations
@@ -255,7 +255,7 @@ enumBody =
 enumConst :: P (EnumConstant Parsed)
 enumConst =
   EnumConstant
-    <$> noPos ident
+    <$> noPos identifier
     <*> option [] (noPos args)
     <*> optionMaybe (noPos classBody)
 
@@ -270,7 +270,7 @@ classBodyDeclarations = manyMaybes classBodyDeclaration
 annotationTypeDeclaration :: P (Mod (InterfaceDecl Parsed))
 annotationTypeDeclaration = do
   try (tok Op_AtSign >> tok KW_Interface)
-  i <- noPos ident
+  i <- noPos identifier
   tps <- typeParameters
   exs <- interfaceExtends
   ps <- classPermits
@@ -280,7 +280,7 @@ annotationTypeDeclaration = do
 normalInterfaceDeclaration :: P (Mod (InterfaceDecl Parsed))
 normalInterfaceDeclaration = do
   tok KW_Interface
-  i <- noPos ident
+  i <- noPos identifier
   tps <- typeParameters
   exs <- interfaceExtends
   ps <- classPermits
@@ -322,7 +322,7 @@ classMemberDeclaration =
 fieldDeclaration :: P (Mod (MemberDecl Parsed))
 fieldDeclaration = do
   typ <- ttype
-  vds <- varDecls
+  vds <- variableDeclarators
   endPos <- semiColon
   return \pos ms -> FieldDecl (pos, endPos) ms typ vds
 
@@ -330,7 +330,7 @@ methodDeclaration :: P (Mod (MemberDecl Parsed))
 methodDeclaration = do
   tps <- typeParameters
   rt <- resultType
-  i <- noPos ident
+  i <- noPos identifier
   fps <- formalParams
   thr <- throws
   (bod, endPos) <- methodBody
@@ -345,7 +345,7 @@ methodBody = onlySemi <|> fullBody
 constrDecl :: P (Mod (MemberDecl Parsed))
 constrDecl = do
   tps <- typeParameters
-  i <- noPos ident
+  i <- noPos identifier
   fps <- option [] formalParams -- record constructors omit the argument list
   thr <- throws
   (bod, endPos) <- constrBody
@@ -411,7 +411,7 @@ absMethodDecl :: P (Mod (MemberDecl Parsed))
 absMethodDecl = do
   tps <- typeParameters
   rt <- resultType
-  i <- noPos ident
+  i <- noPos identifier
   fps <- formalParams
   thr <- throws
   def <- optionMaybe defaultValue
@@ -419,7 +419,7 @@ absMethodDecl = do
   return \pos ms -> MethodDecl (pos, endPos) ms tps rt i fps thr def (MethodBody Nothing)
 
 defaultValue :: P (Exp Parsed)
-defaultValue = tok KW_Default >> noPos exp
+defaultValue = tok KW_Default >> noPos expression
 
 throws :: P [RefType]
 throws = NonEmpty.optional (tok KW_Throws >> refTypeList)
@@ -441,14 +441,14 @@ formalParam = do
   ms <- many modifier
   typ <- ttype
   var <- optionBool ellipsis
-  (vdi, pos) <- varDeclId
+  (vdi, pos) <- variableDeclaratorId
   return (FormalParam (startPos, pos) ms typ var vdi)
 
 catchFormalParam :: P (CatchFormalParam Parsed)
 catchFormalParam = do
   startPos <- getPosition
   typs <- NonEmpty.sepBy ((,) <$> many modifier <*> ttype) (tok Op_Or)
-  (vdi, pos) <- varDeclId
+  (vdi, pos) <- variableDeclaratorId
   return (CatchFormalParam (startPos, pos) typs vdi)
 
 ellipsis :: P SourcePos
@@ -494,7 +494,7 @@ evlist :: P (NonEmpty (Ident, ElementValue Parsed))
 evlist = NonEmpty.sepBy elementValuePair comma
 
 elementValuePair :: P (Ident, ElementValue Parsed)
-elementValuePair = (,) <$> noPos ident <* tok Op_Equal <*> elementValue
+elementValuePair = (,) <$> noPos identifier <* tok Op_Equal <*> elementValue
 
 elementValue :: P (ElementValue Parsed)
 elementValue =
@@ -508,20 +508,20 @@ elementValue =
 ----------------------------------------------------------------------------
 -- Variable declarations
 
-varDecls :: P (NonEmpty (VarDecl Parsed))
-varDecls = NonEmpty.sepBy varDecl comma
+variableDeclarators :: P (NonEmpty (VarDecl Parsed))
+variableDeclarators = NonEmpty.sepBy variableDeclarator comma
 
-varDecl :: P (VarDecl Parsed)
-varDecl = do
+variableDeclarator :: P (VarDecl Parsed)
+variableDeclarator = do
   startPos <- getPosition
-  (vid, vidPos) <- varDeclId
-  (mvi, endPos) <- optionMaybePos vidPos (tok Op_Equal >> varInit)
+  (vid, vidPos) <- variableDeclaratorId
+  (mvi, endPos) <- optionMaybePos vidPos (tok Op_Equal >> variableInitializer)
   return (VarDecl (startPos, endPos) vid mvi)
 
-varDeclId :: P (VarDeclId, SourcePos)
-varDeclId = do
+variableDeclaratorId :: P (VarDeclId, SourcePos)
+variableDeclaratorId = do
   startPos <- getPosition
-  (i, noArrPos) <- ident
+  (i, noArrPos) <- identifier
   ebs <- many emptyBrackets
   let endPos = case ebs of
         [] -> noArrPos
@@ -534,17 +534,17 @@ localVarDecl =
     <$> getPosition
     <*> many modifier
     <*> ttype
-    <*> varDecls
+    <*> variableDeclarators
 
-varInit :: P (VarInit Parsed, SourcePos)
-varInit =
+variableInitializer :: P (VarInit Parsed, SourcePos)
+variableInitializer =
   Bifunctor.first InitArray <$> arrayInit
-    <|> Bifunctor.first InitExp <$> exp
+    <|> Bifunctor.first InitExp <$> expression
 
 arrayInit :: P (ArrayInit Parsed, SourcePos)
 arrayInit = braces do
   startPos <- getPosition
-  (vis, visPos) <- sepEndByPos varInit comma
+  (vis, visPos) <- sepEndByPos variableInitializer comma
   return (ArrayInit (startPos, visPos) vis)
 
 ----------------------------------------------------------------------------
@@ -579,7 +579,7 @@ statement =
     ifStmt = do
       startPos <- getPosition
       tok KW_If
-      e <- noPos $ parens (noPos exp)
+      e <- noPos $ parens (noPos expression)
       try do
         th <- noPos statementNoShortIf
         tok KW_Else
@@ -591,7 +591,7 @@ statement =
     whileStmt = do
       startPos <- getPosition
       tok KW_While
-      e <- noPos $ parens (noPos exp)
+      e <- noPos $ parens (noPos expression)
       (s, endPos) <- statement
       return (While (startPos, endPos) e s, endPos)
     forStmt = do
@@ -603,22 +603,22 @@ statement =
             try do
               fi <- optionMaybe forInit
               void semiColon
-              e <- optionMaybe (noPos exp)
+              e <- optionMaybe (noPos expression)
               void semiColon
               fu <- forUp
               return \pos -> BasicFor (startPos, pos) fi e fu
               <|> do
                 ms <- many modifier
                 t <- ttype
-                i <- noPos ident
+                i <- noPos identifier
                 void colon
-                e <- noPos exp
+                e <- noPos expression
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
       (s, endPos) <- statement
       return (f endPos s, endPos)
     labeledStmt = do
       startPos <- getPosition
-      lbl <- try (noPos ident <* colon)
+      lbl <- try (noPos identifier <* colon)
       (s, endPos) <- statement
       return (Labeled (startPos, endPos) lbl s, endPos)
 
@@ -633,7 +633,7 @@ statementNoShortIf =
     ifStmt = do
       startPos <- getPosition
       tok KW_If
-      e <- noPos $ parens (noPos exp)
+      e <- noPos $ parens (noPos expression)
       th <- noPos statementNoShortIf
       tok KW_Else
       (el, endPos) <- statementNoShortIf
@@ -641,7 +641,7 @@ statementNoShortIf =
     whileStmt = do
       startPos <- getPosition
       tok KW_While
-      e <- noPos $ parens (noPos exp)
+      e <- noPos $ parens (noPos expression)
       (s, endPos) <- statementNoShortIf
       return (While (startPos, endPos) e s, endPos)
     forStmt = do
@@ -653,22 +653,22 @@ statementNoShortIf =
             try do
               fi <- optionMaybe forInit
               void semiColon
-              e <- optionMaybe (noPos exp)
+              e <- optionMaybe (noPos expression)
               void semiColon
               fu <- forUp
               return \pos -> BasicFor (startPos, pos) fi e fu
               <|> do
                 ms <- many modifier
                 t <- ttype
-                i <- noPos ident
+                i <- noPos identifier
                 void colon
-                e <- noPos exp
+                e <- noPos expression
                 return \pos -> EnhancedFor (startPos, pos) ms t i e
       (s, endPos) <- statementNoShortIf
       return (f endPos s, endPos)
     labeledStmt = do
       startPos <- getPosition
-      i <- try (noPos ident <* colon)
+      i <- try (noPos identifier <* colon)
       (s, endPos) <- statementNoShortIf
       return (Labeled (startPos, endPos) i s, endPos)
 
@@ -686,15 +686,15 @@ stmtNoTrail =
       -- assertions
       do
         tok KW_Assert
-        e <- noPos exp
-        me2 <- optionMaybe $ colon >> noPos exp
+        e <- noPos expression
+        me2 <- optionMaybe $ colon >> noPos expression
         pos <- semiColon
         return (Assert (startPos, pos) e me2, pos)
       <|>
       -- switch stmts
       do
         tok KW_Switch
-        e <- noPos $ parens (noPos exp)
+        e <- noPos $ parens (noPos expression)
         ((style, sb), endPos) <- switchBlock
         return (Switch (startPos, endPos) style e sb, endPos)
       <|>
@@ -703,42 +703,42 @@ stmtNoTrail =
         tok KW_Do
         s <- noPos statement
         tok KW_While
-        e <- noPos $ parens (noPos exp)
+        e <- noPos $ parens (noPos expression)
         endPos <- semiColon
         return (Do (startPos, endPos) s e, endPos)
       <|>
       -- break
       do
         tok KW_Break
-        mi <- optionMaybe (noPos ident)
+        mi <- optionMaybe (noPos identifier)
         endPos <- semiColon
         return (Break (startPos, endPos) mi, endPos)
       <|>
       -- continue
       do
         tok KW_Continue
-        mi <- optionMaybe (noPos ident)
+        mi <- optionMaybe (noPos identifier)
         pos <- semiColon
         return (Continue (startPos, pos) mi, pos)
       <|>
       -- return
       do
         tok KW_Return
-        me <- optionMaybe (noPos exp)
+        me <- optionMaybe (noPos expression)
         endPos <- semiColon
         return (Return (startPos, endPos) me, endPos)
       <|>
       -- synchronized
       do
         tok KW_Synchronized
-        e <- noPos $ parens (noPos exp)
+        e <- noPos $ parens (noPos expression)
         (b, endPos) <- block
         return (Synchronized (startPos, endPos) e b, endPos)
       <|>
       -- throw
       do
         tok KW_Throw
-        e <- noPos exp
+        e <- noPos expression
         pos <- semiColon
         return (Throw (startPos, pos) e, pos)
       <|>
@@ -818,7 +818,7 @@ switchExp :: P (Exp Parsed, SourcePos)
 switchExp = do
   startPos <- getPosition
   tok KW_Switch
-  e <- noPos $ parens (noPos exp)
+  e <- noPos $ parens (noPos expression)
   (branches, pos) <- braces switchExpBody
   return (SwitchExp (startPos, pos) e branches, pos)
   where
@@ -829,7 +829,7 @@ switchExp = do
           <|> SwitchExpBranchBlock . pure . fst <$> try blockStmt
           <|> SwitchExpBranchExp <$> branchExp
       return (SwitchExpBranch lbl body)
-    branchExp = noPos exp <* semiColon
+    branchExp = noPos expression <* semiColon
 
 -- Try-catch clauses
 
@@ -846,16 +846,16 @@ tryResourceList = do
     tryResource =
       TryResourceVarDecl <$> try resourceDecl
         <|> TryResourceQualAccess <$> try fieldAccess
-        <|> TryResourceVarAccess <$> noPos ident
+        <|> TryResourceVarAccess <$> noPos identifier
 
 resourceDecl :: P (ResourceDecl Parsed)
 resourceDecl =
   ResourceDecl
     <$> many modifier
     <*> ttype
-    <*> noPos varDeclId
+    <*> noPos variableDeclaratorId
     <* tok Op_Equal
-    <*> noPos varInit
+    <*> noPos variableInitializer
 
 ----------------------------------------------------------------------------
 -- Expressions
@@ -898,8 +898,8 @@ lhs =
     <|> ArrayLhs <$> try (noPos arrayAccess)
     <|> NameLhs <$> noPos name
 
-exp :: P (Exp Parsed, SourcePos)
-exp = assignExp
+expression :: P (Exp Parsed, SourcePos)
+expression = assignExp
 
 assignExp :: P (Exp Parsed, SourcePos)
 assignExp =
@@ -917,7 +917,7 @@ condExp = do
 condExpSuffix :: SourcePos -> P (Exp Parsed -> Exp Parsed, SourcePos)
 condExpSuffix startPos = do
   tok Op_Query
-  th <- noPos exp
+  th <- noPos expression
   void colon
   (el, endPos) <- condExp
   return (\ce -> Cond (startPos, endPos) ce th el, endPos)
@@ -1024,7 +1024,7 @@ primaryNoNewArrayNPS = do
     <|> do
       pos <- tokWithEndPos KW_This
       return (This (startPos, pos), pos)
-    <|> parens (noPos exp)
+    <|> parens (noPos expression)
     <|> try do
       rt <- resultType
       void period
@@ -1063,13 +1063,13 @@ typeDeclSpecifier =
     ( TypeDeclSpecifierWithDiamond
         <$> noPos classType
         <* period
-        <*> noPos ident
+        <*> noPos identifier
         <* tok Op_LThan
         <* tok Op_GThan
     )
     <|> try
       ( TypeDeclSpecifierUnqualifiedWithDiamond
-          <$> noPos ident
+          <$> noPos identifier
           <* tok Op_LThan
           <* tok Op_GThan
       )
@@ -1080,7 +1080,7 @@ instanceCreationSuffix = do
   startPos <- getPosition
   period >> tok KW_New
   tas <- NonEmpty.optional (noPos typeArgs)
-  i <- noPos ident
+  i <- noPos identifier
   (as, argsPos) <- args
   (mcb, pos) <- optionMaybePos argsPos classBody
   return (\p -> QualInstanceCreation (startPos, pos) p tas i as mcb, pos)
@@ -1097,11 +1097,11 @@ instanceCreation =
 
 lambdaParams :: P (LambdaParams Parsed)
 lambdaParams =
-  LambdaSingleParam <$> noPos ident
+  LambdaSingleParam <$> noPos identifier
     <|> noPos
       ( parens $
           LambdaFormalParams <$> try (sepBy formalParam comma)
-            <|> LambdaInferredParams <$> sepBy (noPos ident) comma
+            <|> LambdaInferredParams <$> sepBy (noPos identifier) comma
       )
 
 lambdaExp :: P (Exp Parsed, SourcePos)
@@ -1111,7 +1111,7 @@ lambdaExp = do
   tok LambdaArrow
   (e, pos) <-
     Bifunctor.first LambdaBlock <$> block
-      <|> Bifunctor.first LambdaExpression <$> exp
+      <|> Bifunctor.first LambdaExpression <$> expression
   return (Lambda (startPos, pos) params e, pos)
 
 methodRef :: P (Exp Parsed, SourcePos)
@@ -1121,7 +1121,7 @@ methodRef = do
   tok MethodRefSep
   (mrt, pos) <-
     attrTokWithEndPos KW_New MethodRefConstructor
-      <|> Bifunctor.first MethodRefIdent <$> ident
+      <|> Bifunctor.first MethodRefIdent <$> identifier
   return (MethodRef (startPos, pos) n mrt, pos)
 
 fieldAccessNPS :: P (FieldAccess Parsed, SourcePos)
@@ -1129,19 +1129,19 @@ fieldAccessNPS = do
   startPos <- getPosition
   do
     tok KW_Super >> void period
-    (i, pos) <- ident
+    (i, pos) <- identifier
     return (SuperFieldAccess (startPos, pos) i, pos)
     <|> do
       n <- noPos name
       period >> tok KW_Super >> void period
-      (i, pos) <- ident
+      (i, pos) <- identifier
       return (ClassFieldAccess (startPos, pos) n i, pos)
 
 fieldAccessSuffix :: P (Exp Parsed -> FieldAccess Parsed, SourcePos)
 fieldAccessSuffix = do
   startPos <- getPosition
   void period
-  (i, pos) <- ident
+  (i, pos) <- identifier
   return (\p -> PrimaryFieldAccess (startPos, pos) p i, pos)
 
 fieldAccess :: P (FieldAccess Parsed)
@@ -1160,7 +1160,7 @@ methodInvocationNPS = do
   do
     tok KW_Super >> void period
     rts <- NonEmpty.optional refTypeArgs
-    i <- noPos ident
+    i <- noPos identifier
     (as, pos) <- args
     return (SuperMethodCall (startPos, pos) rts i as, pos)
     <|> do
@@ -1172,7 +1172,7 @@ methodInvocationNPS = do
       void period
       constr <- optionConst TypeMethodCall ClassMethodCall (tok KW_Super >> period)
       rts <- NonEmpty.optional refTypeArgs
-      i <- noPos ident
+      i <- noPos identifier
       (as, pos) <- args
       return (constr (startPos, pos) n rts i as, pos)
 
@@ -1187,10 +1187,10 @@ qualifiedMethodName = do
   where
     go :: SourcePos -> [Ident] -> P (([Ident], SourcePos), [RefType], Ident)
     go endPos nids = do
-      (i, pos) <- ident
+      (i, pos) <- identifier
       ((i : nids, pos),,)
         <$> try (period >> refTypeArgs <&> NonEmpty.toList)
-        <*> noPos ident
+        <*> noPos identifier
         <|> try (period >> go pos (i : nids))
         <|> return ((nids, endPos), [], i)
 
@@ -1199,7 +1199,7 @@ methodInvocationSuffix = do
   startPos <- getPosition
   void period
   rts <- NonEmpty.optional refTypeArgs
-  i <- noPos ident
+  i <- noPos identifier
   (as, pos) <- args
   return (\p -> PrimaryMethodCall (startPos, pos) p rts i as, pos)
 
@@ -1214,7 +1214,7 @@ methodInvocationExp =
     <|> MethodInv <$> noPos methodInvocationNPS
 
 args :: P ([Argument Parsed], SourcePos)
-args = parens (sepBy (noPos exp) comma)
+args = parens (sepBy (noPos expression) comma)
 
 -- Arrays
 
@@ -1222,13 +1222,13 @@ arrayAccessNPS :: P (ArrayIndex Parsed, SourcePos)
 arrayAccessNPS = do
   startPos <- getPosition
   n <- noPos name
-  (e, pos) <- manyNonEmptyPos (brackets (noPos exp))
+  (e, pos) <- manyNonEmptyPos (brackets (noPos expression))
   return (ArrayIndex (startPos, pos) (ExpName n) e, pos)
 
 arrayAccessSuffix :: P (Exp Parsed -> ArrayIndex Parsed, SourcePos)
 arrayAccessSuffix = do
   startPos <- getPosition
-  (e, pos) <- manyNonEmptyPos (brackets (noPos exp))
+  (e, pos) <- manyNonEmptyPos (brackets (noPos expression))
   return (\ref -> ArrayIndex (startPos, pos) ref e, pos)
 
 arrayAccess :: P (ArrayIndex Parsed, SourcePos)
@@ -1248,7 +1248,7 @@ arrayCreation = do
     (ai, pos) <- arrayInit
     return (ArrayCreateInit (startPos, pos) t (length ds) ai, pos)
     <|> do
-      (des, desPos) <- manyNonEmptyPos $ try $ brackets (noPos exp)
+      (des, desPos) <- manyNonEmptyPos $ try $ brackets (noPos expression)
       ds <- many emptyBrackets
       let len = length ds
           pos =
@@ -1377,7 +1377,7 @@ classType = do
 
 classTypeSpec :: P ((Ident, [TypeArgument]), SourcePos)
 classTypeSpec = do
-  (i, iPos) <- ident
+  (i, iPos) <- identifier
   (tas, pos) <- option ([], iPos) (Bifunctor.first NonEmpty.toList <$> typeArgs)
   return ((i, tas), pos)
 
@@ -1400,7 +1400,7 @@ typeParameter :: P (TypeParam Parsed)
 typeParameter =
   TypeParam
     <$> many (Annotation <$> annotation)
-    <*> noPos ident
+    <*> noPos identifier
     <*> NonEmpty.optional bounds
 
 bounds :: P (NonEmpty RefType)
@@ -1428,11 +1428,11 @@ refTypeArgs = noPos $ angles refTypeList
 name :: P (Name, SourcePos)
 name = do
   startPos <- getPosition
-  (idents, endPos) <- trySepByNonEmptyPos ident period
+  (idents, endPos) <- trySepByNonEmptyPos identifier period
   return (Name (startPos, endPos) idents, endPos)
 
-ident :: P (Ident, SourcePos)
-ident = do
+identifier :: P (Ident, SourcePos)
+identifier = do
   startPos <- getPosition
   pos <- getEndPos
   i <- javaToken \case
