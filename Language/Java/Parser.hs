@@ -566,41 +566,39 @@ blockStatement =
 
 statement :: P (Stmt Parsed, SourcePos)
 statement =
-  ifStatement
+  ifStatement ifThen
     <|> whileStatement statement
     <|> forStatement statement
     <|> labeledStatement statement
     <|> statementWithoutTrailingSubstatement
-  where
-    ifStatement = do
-      startPos <- getPosition
-      tok KW_If
-      e <- noPos $ parens (noPos expression)
-      try do
-        th <- noPos statementNoShortIf
-        tok KW_Else
-        (el, endPos) <- statement
-        return (IfThenElse (startPos, endPos) e th el, endPos)
-        <|> do
-          (th, endPos) <- statement
-          return (IfThen (startPos, endPos) e th, endPos)
 
 statementNoShortIf :: P (Stmt Parsed, SourcePos)
 statementNoShortIf =
-  ifThenElseStatementNoShortIf
+  ifStatement (ifThenElse statementNoShortIf)
     <|> whileStatement statementNoShortIf
     <|> forStatement statementNoShortIf
     <|> labeledStatement statementNoShortIf
     <|> statementWithoutTrailingSubstatement
-  where
-    ifThenElseStatementNoShortIf = do
-      startPos <- getPosition
-      tok KW_If
-      e <- noPos $ parens (noPos expression)
-      th <- noPos statementNoShortIf
-      tok KW_Else
-      (el, endPos) <- statementNoShortIf
-      return (IfThenElse (startPos, endPos) e th el, endPos)
+
+ifStatement :: (SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)) -> P (Stmt Parsed, SourcePos)
+ifStatement body = do
+  startPos <- getPosition
+  tok KW_If
+  e <- noPos $ parens (noPos expression)
+  body startPos e
+
+ifThen :: SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)
+ifThen startPos e =
+  try (ifThenElse statement startPos e) <|> do
+    (th, endPos) <- statement
+    return (IfThen (startPos, endPos) e th, endPos)
+
+ifThenElse :: P (Stmt Parsed, SourcePos) -> SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)
+ifThenElse elseStmt startPos e = do
+  th <- noPos statementNoShortIf
+  tok KW_Else
+  (el, endPos) <- elseStmt
+  return (IfThenElse (startPos, endPos) e th el, endPos)
 
 whileStatement, forStatement, labeledStatement :: P (Stmt Parsed, SourcePos) -> P (Stmt Parsed, SourcePos)
 whileStatement stmt = do
