@@ -566,74 +566,52 @@ blockStatement =
 
 statement :: P (Stmt Parsed, SourcePos)
 statement =
-  ifStatement ifThen
-    <|> whileStatement statement
-    <|> forStatement statement
-    <|> labeledStatement statement
+  ifStatement
+    <|> whileStatement
+    <|> forStatement
+    <|> labeledStatement
     <|> statementWithoutTrailingSubstatement
-
-statementNoShortIf :: P (Stmt Parsed, SourcePos)
-statementNoShortIf =
-  ifStatement (ifThenElse statementNoShortIf)
-    <|> whileStatement statementNoShortIf
-    <|> forStatement statementNoShortIf
-    <|> labeledStatement statementNoShortIf
-    <|> statementWithoutTrailingSubstatement
-
-ifStatement :: (SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)) -> P (Stmt Parsed, SourcePos)
-ifStatement body = do
-  startPos <- getPosition
-  tok KW_If
-  e <- noPos $ parens (noPos expression)
-  body startPos e
-
-ifThen :: SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)
-ifThen startPos e =
-  try (ifThenElse statement startPos e) <|> do
-    (th, endPos) <- statement
-    return (IfThen (startPos, endPos) e th, endPos)
-
-ifThenElse :: P (Stmt Parsed, SourcePos) -> SourcePos -> Exp Parsed -> P (Stmt Parsed, SourcePos)
-ifThenElse elseStmt startPos e = do
-  th <- noPos statementNoShortIf
-  tok KW_Else
-  (el, endPos) <- elseStmt
-  return (IfThenElse (startPos, endPos) e th el, endPos)
-
-whileStatement, forStatement, labeledStatement :: P (Stmt Parsed, SourcePos) -> P (Stmt Parsed, SourcePos)
-whileStatement stmt = do
-  startPos <- getPosition
-  tok KW_While
-  e <- noPos $ parens (noPos expression)
-  (s, endPos) <- stmt
-  return (While (startPos, endPos) e s, endPos)
-forStatement stmt = do
-  startPos <- getPosition
-  tok KW_For
-  f <-
-    noPos $
-      parens $
-        try do
-          fi <- optionMaybe forInit
-          void semiColon
-          e <- optionMaybe (noPos expression)
-          void semiColon
-          fu <- forUp
-          return \pos -> BasicFor (startPos, pos) fi e fu
-          <|> do
-            ms <- many modifier
-            t <- ttype
-            i <- noPos identifier
-            void colon
-            e <- noPos expression
-            return \pos -> EnhancedFor (startPos, pos) ms t i e
-  (s, endPos) <- stmt
-  return (f endPos s, endPos)
-labeledStatement stmt = do
-  startPos <- getPosition
-  i <- try (noPos identifier <* colon)
-  (s, endPos) <- stmt
-  return (Labeled (startPos, endPos) i s, endPos)
+  where
+    ifStatement = do
+      startPos <- getPosition
+      tok KW_If
+      e <- noPos (parens (noPos expression))
+      (th, endPos) <- statement
+      option (IfThen (startPos, endPos) e th, endPos) do
+        tok KW_Else
+        (el, endPos') <- statement
+        return (IfThenElse (startPos, endPos') e th el, endPos')
+    whileStatement = do
+      startPos <- getPosition
+      tok KW_While
+      e <- noPos (parens (noPos expression))
+      (s, endPos) <- statement
+      return (While (startPos, endPos) e s, endPos)
+    forStatement = do
+      startPos <- getPosition
+      tok KW_For
+      f <-
+        noPos . parens $
+          do
+            fi <- try (optionMaybe forInit <* semiColon)
+            e <- optionMaybe (noPos expression)
+            void semiColon
+            fu <- forUp
+            return \pos -> BasicFor (startPos, pos) fi e fu
+            <|> do
+              ms <- many modifier
+              t <- ttype
+              i <- noPos identifier
+              void colon
+              e <- noPos expression
+              return \pos -> EnhancedFor (startPos, pos) ms t i e
+      (s, endPos) <- statement
+      return (f endPos s, endPos)
+    labeledStatement = do
+      startPos <- getPosition
+      i <- try (noPos identifier <* colon)
+      (s, endPos) <- statement
+      return (Labeled (startPos, endPos) i s, endPos)
 
 statementWithoutTrailingSubstatement :: P (Stmt Parsed, SourcePos)
 statementWithoutTrailingSubstatement =
