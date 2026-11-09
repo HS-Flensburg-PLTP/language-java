@@ -753,7 +753,7 @@ switchExpression = do
   (branches, pos) <- braces switchExpBody
   return (SwitchExp (startPos, pos) e branches, pos)
   where
-    switchExpBody = NonEmpty.many do
+    switchExpBody = NonEmpty.some do
       lbl <- switchLabel
       tok LambdaArrow
       body <-
@@ -813,7 +813,7 @@ postIncDec :: P (Exp Parsed)
 postIncDec = do
   startPos <- getPosition
   e <- noPos postfixExpNES
-  ops <- NonEmpty.many (noPos postfixOp)
+  ops <- NonEmpty.some (noPos postfixOp)
   return (foldl' (\a s -> s startPos a) e ops)
 
 assignment :: P (Exp Parsed, SourcePos)
@@ -1186,7 +1186,7 @@ arrayCreation = do
   tok KW_New
   t <- nonArrayType
   try do
-    ds <- NonEmpty.many emptyBrackets
+    ds <- NonEmpty.some emptyBrackets
     (ai, pos) <- arrayInitializer
     return (ArrayCreateInit (startPos, pos) t (length ds) ai, pos)
     <|> do
@@ -1277,7 +1277,7 @@ referenceType = do
   startPos <- getPosition
   do
     pt <- primitiveType
-    pos :| bs <- NonEmpty.many emptyBrackets
+    pos :| bs <- NonEmpty.some emptyBrackets
     return
       ( Bifunctor.first
           ($ pt)
@@ -1401,7 +1401,7 @@ optionMaybePos pos p = option (Nothing, pos) (Bifunctor.first Just <$> p)
 
 manyNonEmptyPos :: P (a, SourcePos) -> P (NonEmpty a, SourcePos)
 manyNonEmptyPos p =
-  NonEmpty.many p
+  NonEmpty.some p
     <&> \ll -> (NonEmpty.map fst ll, snd (NonEmpty.last ll))
 
 manyPos :: SourcePos -> P (a, SourcePos) -> P ([a], SourcePos)
