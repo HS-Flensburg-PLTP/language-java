@@ -13,6 +13,8 @@ $digit       = [0-9]
 $digitUnder  = [0-9_]
 $nonzero     = [1-9]
 $octdig      = [0-7]
+$bindig      = [01]
+$bindigUnder = [01_]
 $hexdig      = [0-9A-Fa-f]
 $hexdigUnder = [0-9A-Fa-f_]
 
@@ -98,6 +100,8 @@ tokens  :-
     0 $digitUnder+ [lL]          { \p s -> parseNum p readOct (init s) LongTok }
     $nonzero $digitUnder*        { \p s -> parseNum p reads s IntTok }
     $nonzero $digitUnder* [lL]   { \p s -> parseNum p reads (init s) LongTok }
+    0 [bB] $bindig $bindigUnder*         { \p s -> parseNum p readBin (drop 2 s) IntTok }
+    0 [bB] $bindig $bindigUnder* [lL]    { \p s -> parseNum p readBin (init (drop 2 s)) LongTok }
     0 [xX] $hexdig $hexdigUnder*         { \p s -> parseNum p readHex (drop 2 s) IntTok }
     0 [xX] $hexdig $hexdigUnder* [lL]    { \p s -> parseNum p readHex (init (drop 2 s)) LongTok }
 
