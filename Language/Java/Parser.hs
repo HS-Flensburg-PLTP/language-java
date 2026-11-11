@@ -831,7 +831,7 @@ lhs =
     <|> NameLhs <$> noPos name
 
 expression :: P (Exp Parsed, SourcePos)
-expression = assignExp
+expression = assignExp <?> "expression"
 
 assignExp :: P (Exp Parsed, SourcePos)
 assignExp =
@@ -1211,6 +1211,7 @@ literal = do
     BoolTok b -> Just (Boolean sp b)
     NullTok -> Just (Null sp)
     _ -> Nothing
+    <?> "literal"
 
 -- Operators
 
@@ -1380,9 +1381,11 @@ identifier :: P (Ident, SourcePos)
 identifier = do
   startPos <- getPosition
   pos <- getEndPos
-  i <- javaToken \case
-    IdentTok s -> Just (Ident (startPos, pos) s)
-    _ -> Nothing
+  i <-
+    javaToken \case
+      IdentTok s -> Just (Ident (startPos, pos) s)
+      _ -> Nothing
+      <?> "identifier"
   return (i, pos)
 
 fixedIdent :: String -> P ()
@@ -1440,7 +1443,7 @@ javaToken test = token showT posT testT
     testT (L1 _ _ t) = test t
 
 tok :: Token -> P ()
-tok t = javaToken \r -> if r == t then Just () else Nothing
+tok t = javaToken (\r -> if r == t then Just () else Nothing) <?> show t
 
 attrTok :: Token -> b -> P b
 attrTok t constr = tok t $> constr
