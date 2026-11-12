@@ -717,10 +717,13 @@ forUp = sepBy stmtExp comma
 -- Switches
 
 switchBlock :: P ((SwitchStyle, [SwitchBlock Parsed]), SourcePos)
-switchBlock = braces (try old <|> new)
+switchBlock = braces (new <|> old)
   where
     old = (SwitchOldStyle,) <$> many switchBlockStatement
-    new = (SwitchNewStyle,) <$> many switchRule
+    new =
+      (SwitchNewStyle,)
+        <$ try (lookAhead (switchLabel >> tok LambdaArrow))
+        <*> many switchRule
 
 switchBlockStatement :: P (SwitchBlock Parsed)
 switchBlockStatement = do

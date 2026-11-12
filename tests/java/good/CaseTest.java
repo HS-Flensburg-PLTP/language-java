@@ -11,6 +11,9 @@ class JsonElement {
 }
 
 public class CaseTest {
+    void switchStatementEmpty() {
+        switch (0) {}
+    }
     void switchStatementOld(Day day) {
         switch (day) {
             case MONDAY, FRIDAY, SUNDAY:
