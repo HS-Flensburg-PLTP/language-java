@@ -719,28 +719,23 @@ forUp = sepBy stmtExp comma
 switchBlock :: P ((SwitchStyle, [SwitchBlock Parsed]), SourcePos)
 switchBlock = braces (new <|> old)
   where
-    old = (SwitchOldStyle,) <$> many switchBlockStatement
+    old =
+      (SwitchOldStyle,) <$> switchCases do
+        lblPos <- colon
+        manyPos lblPos blockStatement
+    -- Since Java 14
     new =
       (SwitchNewStyle,)
         <$ try (lookAhead (switchLabel >> tok LambdaArrow))
-        <*> many switchRule
-
-switchBlockStatement :: P (SwitchBlock Parsed)
-switchBlockStatement = do
-  startPos <- getPosition
-  lbl <- switchLabel
-  lblPos <- colon
-  (bss, pos) <- manyPos lblPos blockStatement
-  return (SwitchBlock (startPos, pos) lbl bss)
-
--- Since Java 14
-switchRule :: P (SwitchBlock Parsed)
-switchRule = do
-  startPos <- getPosition
-  lbl <- switchLabel
-  tok LambdaArrow
-  (bss, pos) <- braces (many (noPos blockStatement)) <|> Bifunctor.first pure <$> blockStatement
-  return (SwitchBlock (startPos, pos) lbl bss)
+        <*> switchCases do
+          tok LambdaArrow
+          braces (many (noPos blockStatement))
+            <|> Bifunctor.first pure <$> blockStatement
+    switchCases body = many do
+      startPos <- getPosition
+      lbl <- switchLabel
+      (bss, pos) <- body
+      return (SwitchBlock (startPos, pos) lbl bss)
 
 switchLabel :: P (SwitchLabel Parsed)
 switchLabel =
