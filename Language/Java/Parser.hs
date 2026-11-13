@@ -268,13 +268,11 @@ classBodyDeclarations = manyMaybes classBodyDeclaration
 
 annotationTypeDeclaration :: P (Mod (InterfaceDecl Parsed))
 annotationTypeDeclaration = do
-  try (tok Op_AtSign >> tok KW_Interface)
+  tok Op_AtSign
+  tok KW_Interface
   i <- noPos identifier
-  tps <- typeParameters
-  exs <- interfaceExtends
-  ps <- classPermits
   (bod, endPos) <- interfaceBody
-  return \pos ms -> InterfaceDecl (pos, endPos) InterfaceAnnotation ms i tps exs ps bod
+  return \pos ms -> InterfaceDecl (pos, endPos) InterfaceAnnotation ms i [] [] [] bod
 
 normalInterfaceDeclaration :: P (Mod (InterfaceDecl Parsed))
 normalInterfaceDeclaration = do
